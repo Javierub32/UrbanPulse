@@ -66,6 +66,7 @@ CREATE TABLE "User" (
     "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     "name" VARCHAR,
     "email" VARCHAR,
+	"passwordHash" VARCHAR,
     "role" "UserRole",
     "active" BOOLEAN,
     "createdAt" TIMESTAMP
