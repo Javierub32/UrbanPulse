@@ -4,8 +4,11 @@ import com.leftjoiner.urbanpulse.urbanpulse.entity.User;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -16,6 +19,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Testcontainers
@@ -44,12 +48,13 @@ class UserRepositoryIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    @Test
-    void findsUserByEmailAndReadsStoredBcryptHash() {
+    @ParameterizedTest
+    @ValueSource(strings = {"citizen@example.com", "CITIZEN@EXAMPLE.COM", "Citizen@Example.com"})
+    void findsUserIgnoringEmailCaseAndReadsStoredBcryptHash(String email) {
         String password = "test-password";
         User user = new User();
         user.setName("Test citizen");
-        user.setEmail("citizen@example.com");
+        user.setEmail("Citizen@Example.com");
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setRole(UserRole.CITIZEN);
         user.setActive(true);
@@ -57,9 +62,10 @@ class UserRepositoryIntegrationTest {
         entityManager.flush();
         entityManager.clear();
 
-        User found = userRepository.findByEmail("citizen@example.com").orElseThrow();
+        User found = userRepository.findByEmail(email).orElseThrow();
 
         assertEquals(user.getId(), found.getId());
+        assertEquals("Citizen@Example.com", found.getEmail());
         assertEquals(user.getPasswordHash(), found.getPasswordHash());
         assertTrue(passwordEncoder.matches(password, found.getPasswordHash()));
     }
@@ -67,5 +73,19 @@ class UserRepositoryIntegrationTest {
     @Test
     void returnsEmptyWhenEmailDoesNotExist() {
         assertTrue(userRepository.findByEmail("missing@example.com").isEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"citizen@example.com", "CITIZEN@EXAMPLE.COM"})
+    void databaseRejectsDuplicateEmailRegardlessOfCase(String email) {
+        User first = new User();
+        first.setEmail("citizen@example.com");
+        userRepository.saveAndFlush(first);
+
+        User duplicate = new User();
+        duplicate.setEmail(email);
+
+        assertThrows(DataIntegrityViolationException.class,
+                () -> userRepository.saveAndFlush(duplicate));
     }
 }

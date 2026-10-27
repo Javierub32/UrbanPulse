@@ -136,13 +136,16 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    void rejectsAmbiguousEmailUntilDatabaseUniquenessIsEnforced() throws Exception {
-        User first = createUser(true);
-        User second = createUser(true);
-        second.setEmail(first.getEmail());
-        userRepository.saveAndFlush(second);
+    void logsInIgnoringEmailCaseAndReturnsStoredEmail() throws Exception {
+        User user = createUser(true);
+        user.setEmail("Citizen-" + UUID.randomUUID() + "@Example.COM");
+        userRepository.saveAndFlush(user);
 
-        assertUnauthorized(postLogin(first.getEmail(), PASSWORD));
+        HttpResponse<String> response = postLogin(
+                user.getEmail().toLowerCase(java.util.Locale.ROOT), PASSWORD);
+
+        assertEquals(200, response.statusCode());
+        assertEquals(user.getEmail(), jsonMapper.readTree(response.body()).path("email").asString());
     }
 
     @Test
