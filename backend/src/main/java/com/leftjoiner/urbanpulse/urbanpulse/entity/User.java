@@ -30,6 +30,9 @@ public class User {
     @Column(name = "\"email\"")
     private String email;
 
+    @Column(name = "\"passwordHash\"")
+    private String passwordHash;
+
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)
     @Column(name = "\"role\"", columnDefinition = "\"UserRole\"")
