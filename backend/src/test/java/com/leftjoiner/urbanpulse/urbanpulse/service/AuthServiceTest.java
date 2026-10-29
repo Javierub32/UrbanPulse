@@ -1,7 +1,7 @@
 package com.leftjoiner.urbanpulse.urbanpulse.service;
 
 import com.leftjoiner.urbanpulse.urbanpulse.dto.LoginResponse;
-import com.leftjoiner.urbanpulse.urbanpulse.entity.User;
+import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.LoginResponseMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
@@ -45,7 +45,7 @@ class AuthServiceTest {
 
     @Test
     void returnsPublicUserForValidCredentials() {
-        User user = activeUser(PASSWORD);
+        UserEntity user = activeUser(PASSWORD);
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
 
         LoginResponse response = authService.authenticate(EMAIL, PASSWORD).orElseThrow();
@@ -71,7 +71,7 @@ class AuthServiceTest {
     @NullSource
     @ValueSource(booleans = false)
     void rejectsInactiveOrUnspecifiedActiveState(Boolean active) {
-        User user = activeUser(PASSWORD);
+        UserEntity user = activeUser(PASSWORD);
         user.setActive(active);
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
 
@@ -82,7 +82,7 @@ class AuthServiceTest {
     @NullSource
     @ValueSource(strings = {"", " ", "plaintext", "$2a$10$bad"})
     void rejectsMissingOrMalformedStoredHash(String hash) {
-        User user = activeUser(PASSWORD);
+        UserEntity user = activeUser(PASSWORD);
         user.setPasswordHash(hash);
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
 
@@ -91,7 +91,7 @@ class AuthServiceTest {
 
     @Test
     void rejectsBcryptHashWithInvalidCost() {
-        User user = activeUser(PASSWORD);
+        UserEntity user = activeUser(PASSWORD);
         user.setPasswordHash("$2a$03$" + "a".repeat(53));
         when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
 
@@ -137,8 +137,8 @@ class AuthServiceTest {
         assertTrue(authService.authenticate(EMAIL, password).isPresent());
     }
 
-    private User activeUser(String password) {
-        User user = new User();
+    private UserEntity activeUser(String password) {
+        UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
         user.setName("Test citizen");
         user.setEmail(EMAIL);

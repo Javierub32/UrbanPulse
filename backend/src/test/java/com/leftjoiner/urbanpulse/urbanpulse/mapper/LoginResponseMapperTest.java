@@ -1,7 +1,7 @@
 package com.leftjoiner.urbanpulse.urbanpulse.mapper;
 
 import com.leftjoiner.urbanpulse.urbanpulse.dto.LoginResponse;
-import com.leftjoiner.urbanpulse.urbanpulse.entity.User;
+import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
 import org.junit.jupiter.api.Test;
 
@@ -18,8 +18,8 @@ class LoginResponseMapperTest {
 
     @Test
     void mapsPublicFieldsOfEachUserInOriginalOrder() {
-        User first = user("First", "first@example.com", UserRole.CITIZEN);
-        User second = user("Second", "second@example.com", UserRole.OPERATOR);
+        UserEntity first = user("First", "first@example.com", UserRole.CITIZEN);
+        UserEntity second = user("Second", "second@example.com", UserRole.OPERATOR);
 
         List<LoginResponse> responses = mapper.toDTOList(List.of(first, second));
 
@@ -48,8 +48,8 @@ class LoginResponseMapperTest {
         assertNull(mapper.toDTO(null));
     }
 
-    private User user(String name, String email, UserRole role) {
-        User user = new User();
+    private UserEntity user(String name, String email, UserRole role) {
+        UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
         user.setName(name);
         user.setEmail(email);

@@ -1,7 +1,10 @@
 package com.leftjoiner.urbanpulse.urbanpulse.entity;
 
+import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.ContextType;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.Getter;
@@ -12,11 +15,11 @@ import org.hibernate.type.SqlTypes;
 import org.locationtech.jts.geom.Geometry;
 
 @Entity
-@Table(name = "\"ExternalObservation\"")
+@Table(name = "\"UrbanContext\"")
 @Getter
 @Setter
 @NoArgsConstructor
-public class ExternalObservation {
+public class UrbanContextEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -24,14 +27,16 @@ public class ExternalObservation {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "\"urbanContextId\"", referencedColumnName = "\"id\"", nullable = false)
-    private UrbanContext urbanContext;
+    @JoinColumn(name = "\"incidentId\"", referencedColumnName = "\"id\"", nullable = false)
+    private IncidentEntity incident;
 
-    @Column(name = "\"source\"")
-    private String source;
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "\"type\"", columnDefinition = "\"ContextType\"")
+    private ContextType type;
 
-    @Column(name = "\"type\"")
-    private String type;
+    @Column(name = "\"key\"")
+    private String key;
 
     @Column(name = "\"value\"")
     private String value;
@@ -48,10 +53,16 @@ public class ExternalObservation {
     @Column(name = "\"ingestedAt\"")
     private LocalDateTime ingestedAt;
 
-    @Column(name = "\"quality\"")
-    private String quality;
+    @Column(name = "\"source\"")
+    private String source;
+
+    @Column(name = "\"status\"")
+    private String status;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "\"metadata\"", columnDefinition = "json")
     private Map<String, Object> metadata;
+
+    @OneToMany(mappedBy = "urbanContext")
+    private List<ExternalObservationEntity> externalObservations = new ArrayList<>();
 }

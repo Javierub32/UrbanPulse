@@ -17,7 +17,7 @@ import org.hibernate.type.SqlTypes;
 @Getter
 @Setter
 @NoArgsConstructor
-public class Assignment {
+public class AssignmentEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -26,11 +26,11 @@ public class Assignment {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "\"incidentId\"", referencedColumnName = "\"id\"", nullable = false)
-    private Incident incident;
+    private IncidentEntity incident;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "\"technicianId\"", referencedColumnName = "\"id\"", nullable = false)
-    private User technician;
+    private UserEntity technician;
 
     @Column(name = "\"department\"")
     private String department;
@@ -53,5 +53,5 @@ public class Assignment {
     private LocalDateTime finishedAt;
 
     @OneToMany(mappedBy = "assignment")
-    private List<StatusChange> statusChanges = new ArrayList<>();
+    private List<StatusChangeEntity> statusChanges = new ArrayList<>();
 }

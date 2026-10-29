@@ -1,9 +1,8 @@
 package com.leftjoiner.urbanpulse.urbanpulse.entity;
 
+import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.AttachmentType;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import lombok.Getter;
@@ -13,42 +12,39 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
-@Table(name = "\"KnowledgeDocument\"")
+@Table(name = "\"Attachment\"")
 @Getter
 @Setter
 @NoArgsConstructor
-public class KnowledgeDocument {
+public class AttachmentEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "\"id\"", nullable = false, updatable = false)
     private UUID id;
 
-    @Column(name = "\"title\"")
-    private String title;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "\"incidentId\"", referencedColumnName = "\"id\"", nullable = false)
+    private IncidentEntity incident;
 
-    @Column(name = "\"type\"")
-    private String type;
-
-    @Column(name = "\"version\"")
-    private String version;
-
-    @Column(name = "\"content\"", columnDefinition = "text")
-    private String content;
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(name = "\"type\"", columnDefinition = "\"AttachmentType\"")
+    private AttachmentType type;
 
     @Column(name = "\"url\"")
     private String url;
 
-    @Column(name = "\"source\"")
-    private String source;
+    @Column(name = "\"name\"")
+    private String name;
 
-    @Column(name = "\"createdAt\"")
-    private LocalDateTime createdAt;
+    @Column(name = "\"size\"")
+    private Long size;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "\"metadata\"", columnDefinition = "json")
     private Map<String, Object> metadata;
 
-    @ManyToMany(mappedBy = "knowledgeDocuments")
-    private List<Incident> incidents = new ArrayList<>();
+    @Column(name = "\"createdAt\"")
+    private LocalDateTime createdAt;
 }
