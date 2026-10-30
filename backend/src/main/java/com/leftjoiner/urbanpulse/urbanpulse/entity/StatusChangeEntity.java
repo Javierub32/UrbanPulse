@@ -15,7 +15,7 @@ import org.hibernate.type.SqlTypes;
 @Getter
 @Setter
 @NoArgsConstructor
-public class StatusChange {
+public class StatusChangeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -24,15 +24,15 @@ public class StatusChange {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "\"incidentId\"", referencedColumnName = "\"id\"", nullable = false)
-    private Incident incident;
+    private IncidentEntity incident;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "\"assignmentId\"", referencedColumnName = "\"id\"", nullable = false)
-    private Assignment assignment;
+    private AssignmentEntity assignment;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "\"userId\"", referencedColumnName = "\"id\"", nullable = false)
-    private User user;
+    private UserEntity user;
 
     @Enumerated(EnumType.STRING)
     @JdbcTypeCode(SqlTypes.NAMED_ENUM)

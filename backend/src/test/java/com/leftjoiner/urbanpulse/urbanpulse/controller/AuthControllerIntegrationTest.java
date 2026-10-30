@@ -1,7 +1,7 @@
 package com.leftjoiner.urbanpulse.urbanpulse.controller;
 
 import com.leftjoiner.urbanpulse.urbanpulse.dto.LoginResponse;
-import com.leftjoiner.urbanpulse.urbanpulse.entity.User;
+import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -68,7 +68,7 @@ class AuthControllerIntegrationTest {
 
     @Test
     void logsInAgainstPostgresAndReturnsOnlyPublicFields() throws Exception {
-        User user = createUser(true);
+        UserEntity user = createUser(true);
 
         HttpResponse<String> response = postLogin(user.getEmail(), PASSWORD);
 
@@ -82,7 +82,7 @@ class AuthControllerIntegrationTest {
 
     @Test
     void rejectsIncorrectPassword() throws Exception {
-        User user = createUser(true);
+        UserEntity user = createUser(true);
 
         assertUnauthorized(postLogin(user.getEmail(), "wrong-password"));
     }
@@ -96,14 +96,14 @@ class AuthControllerIntegrationTest {
     @NullSource
     @ValueSource(booleans = false)
     void rejectsInactiveOrUnspecifiedActiveState(Boolean active) throws Exception {
-        User user = createUser(active);
+        UserEntity user = createUser(active);
 
         assertUnauthorized(postLogin(user.getEmail(), PASSWORD));
     }
 
     @Test
     void rejectsStoredHashSubmittedAsPassword() throws Exception {
-        User user = createUser(true);
+        UserEntity user = createUser(true);
 
         assertUnauthorized(postLogin(user.getEmail(), user.getPasswordHash()));
     }
@@ -112,7 +112,7 @@ class AuthControllerIntegrationTest {
     @NullSource
     @ValueSource(strings = {"", "plaintext", "$2a$10$bad"})
     void rejectsMissingOrMalformedHashReadFromPostgres(String hash) throws Exception {
-        User user = createUser(true);
+        UserEntity user = createUser(true);
         user.setPasswordHash(hash);
         userRepository.saveAndFlush(user);
 
@@ -123,7 +123,7 @@ class AuthControllerIntegrationTest {
     @ExtendWith(OutputCaptureExtension.class)
     void doesNotLogPasswordsOrStoredHash(CapturedOutput output) throws Exception {
         String password = "audit-secret-" + UUID.randomUUID();
-        User user = createUser(true);
+        UserEntity user = createUser(true);
         user.setPasswordHash(passwordEncoder.encode(password));
         userRepository.saveAndFlush(user);
 
@@ -137,7 +137,7 @@ class AuthControllerIntegrationTest {
 
     @Test
     void logsInIgnoringEmailCaseAndReturnsStoredEmail() throws Exception {
-        User user = createUser(true);
+        UserEntity user = createUser(true);
         user.setEmail("Citizen-" + UUID.randomUUID() + "@Example.COM");
         userRepository.saveAndFlush(user);
 
@@ -168,8 +168,8 @@ class AuthControllerIntegrationTest {
         assertEquals("UP", jsonMapper.readTree(response.body()).path("status").asString());
     }
 
-    private User createUser(Boolean active) {
-        User user = new User();
+    private UserEntity createUser(Boolean active) {
+        UserEntity user = new UserEntity();
         user.setName("Integration test citizen");
         user.setEmail(UUID.randomUUID() + "@example.com");
         user.setPasswordHash(passwordEncoder.encode(PASSWORD));

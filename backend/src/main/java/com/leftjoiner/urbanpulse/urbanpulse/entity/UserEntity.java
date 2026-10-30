@@ -17,7 +17,7 @@ import org.hibernate.type.SqlTypes;
 @Getter
 @Setter
 @NoArgsConstructor
-public class User {
+public class UserEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -45,14 +45,14 @@ public class User {
     private LocalDateTime createdAt;
 
     @OneToMany(mappedBy = "user")
-    private List<Incident> incidents = new ArrayList<>();
+    private List<IncidentEntity> incidents = new ArrayList<>();
 
     @OneToMany(mappedBy = "technician")
-    private List<Assignment> assignments = new ArrayList<>();
+    private List<AssignmentEntity> assignments = new ArrayList<>();
 
     @OneToMany(mappedBy = "user")
-    private List<StatusChange> statusChanges = new ArrayList<>();
+    private List<StatusChangeEntity> statusChanges = new ArrayList<>();
 
     @OneToMany(mappedBy = "user")
-    private List<Notification> notifications = new ArrayList<>();
+    private List<NotificationEntity> notifications = new ArrayList<>();
 }

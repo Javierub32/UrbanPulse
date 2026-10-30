@@ -1,7 +1,7 @@
 package com.leftjoiner.urbanpulse.urbanpulse.service;
 
 import com.leftjoiner.urbanpulse.urbanpulse.dto.LoginResponse;
-import com.leftjoiner.urbanpulse.urbanpulse.entity.User;
+import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.LoginResponseMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +29,7 @@ public class AuthService {
             return Optional.empty();
         }
 
-        Optional<User> user;
+        Optional<UserEntity> user;
         try {
             user = userRepository.findByEmail(email);
         } catch (IncorrectResultSizeDataAccessException exception) {

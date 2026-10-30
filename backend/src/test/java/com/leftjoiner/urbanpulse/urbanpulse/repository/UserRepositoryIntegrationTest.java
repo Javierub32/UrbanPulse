@@ -1,6 +1,6 @@
 package com.leftjoiner.urbanpulse.urbanpulse.repository;
 
-import com.leftjoiner.urbanpulse.urbanpulse.entity.User;
+import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
@@ -52,7 +52,7 @@ class UserRepositoryIntegrationTest {
     @ValueSource(strings = {"citizen@example.com", "CITIZEN@EXAMPLE.COM", "Citizen@Example.com"})
     void findsUserIgnoringEmailCaseAndReadsStoredBcryptHash(String email) {
         String password = "test-password";
-        User user = new User();
+        UserEntity user = new UserEntity();
         user.setName("Test citizen");
         user.setEmail("Citizen@Example.com");
         user.setPasswordHash(passwordEncoder.encode(password));
@@ -62,7 +62,7 @@ class UserRepositoryIntegrationTest {
         entityManager.flush();
         entityManager.clear();
 
-        User found = userRepository.findByEmail(email).orElseThrow();
+        UserEntity found = userRepository.findByEmail(email).orElseThrow();
 
         assertEquals(user.getId(), found.getId());
         assertEquals("Citizen@Example.com", found.getEmail());
@@ -78,11 +78,11 @@ class UserRepositoryIntegrationTest {
     @ParameterizedTest
     @ValueSource(strings = {"citizen@example.com", "CITIZEN@EXAMPLE.COM"})
     void databaseRejectsDuplicateEmailRegardlessOfCase(String email) {
-        User first = new User();
+        UserEntity first = new UserEntity();
         first.setEmail("citizen@example.com");
         userRepository.saveAndFlush(first);
 
-        User duplicate = new User();
+        UserEntity duplicate = new UserEntity();
         duplicate.setEmail(email);
 
         assertThrows(DataIntegrityViolationException.class,
