@@ -4,6 +4,7 @@ import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentRequest;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
+import com.leftjoiner.urbanpulse.urbanpulse.exception.UserNotFoundException;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.IncidentMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.IncidentRepository;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
@@ -11,8 +12,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Point;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.server.ResponseStatusException;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -51,8 +50,7 @@ class IncidentServiceTest {
         var service = new IncidentService(incidents, users, mapper);
         IncidentRequest request = request(UUID.randomUUID());
         when(users.findById(request.getUserId())).thenReturn(Optional.empty());
-        ResponseStatusException error = assertThrows(ResponseStatusException.class, () -> service.create(request));
-        assertEquals(HttpStatus.NOT_FOUND, error.getStatusCode());
+        assertThrows(UserNotFoundException.class, () -> service.create(request));
         verifyNoInteractions(incidents);
     }
 
