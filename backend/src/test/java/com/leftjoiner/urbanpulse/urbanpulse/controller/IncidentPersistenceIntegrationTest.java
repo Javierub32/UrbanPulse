@@ -21,6 +21,8 @@ import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.json.JsonMapper;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @Testcontainers
@@ -37,6 +39,18 @@ class IncidentPersistenceIntegrationTest {
     @Autowired MockMvc mockMvc;
     @Autowired UserRepository users;
     @Autowired IncidentRepository incidents;
+
+    @Test
+    void documentsIncidentResponsesAndErrorExtensions() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/incidents/create'].post.responses['201']").exists())
+                .andExpect(jsonPath("$.paths['/api/incidents/create'].post.responses['400'].content['application/problem+json']").exists())
+                .andExpect(jsonPath("$.paths['/api/incidents/create'].post.responses['404']").exists())
+                .andExpect(jsonPath("$.paths['/api/incidents/create'].post.responses['500']").exists())
+                .andExpect(jsonPath("$.components.schemas.ProblemResponse.properties.code").exists())
+                .andExpect(jsonPath("$.components.schemas.ProblemResponse.properties.errors").exists());
+    }
 
     @Test
     void createsAndReadsIncidentFromPostgis() throws Exception {
