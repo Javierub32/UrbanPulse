@@ -20,7 +20,7 @@ import org.locationtech.jts.geom.Geometry;
 @Getter
 @Setter
 @NoArgsConstructor
-public class Incident {
+public class IncidentEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -29,7 +29,7 @@ public class Incident {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "\"userId\"", referencedColumnName = "\"id\"", nullable = false)
-    private User user;
+    private UserEntity user;
 
     @Column(name = "\"title\"")
     private String title;
@@ -71,26 +71,26 @@ public class Incident {
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "incident")
-    private List<Attachment> attachments = new ArrayList<>();
+    private List<AttachmentEntity> attachments = new ArrayList<>();
 
     @OneToMany(mappedBy = "incident")
-    private List<IncidentAssetAssociation> assetAssociations = new ArrayList<>();
+    private List<IncidentAssetAssociationEntity> assetAssociations = new ArrayList<>();
 
     @OneToMany(mappedBy = "incident")
-    private List<UrbanContext> urbanContexts = new ArrayList<>();
+    private List<UrbanContextEntity> urbanContexts = new ArrayList<>();
 
     @OneToMany(mappedBy = "incident")
-    private List<Assignment> assignments = new ArrayList<>();
+    private List<AssignmentEntity> assignments = new ArrayList<>();
 
     @OneToMany(mappedBy = "incident")
-    private List<StatusChange> statusChanges = new ArrayList<>();
+    private List<StatusChangeEntity> statusChanges = new ArrayList<>();
 
     @OneToMany(mappedBy = "incident")
-    private List<Notification> notifications = new ArrayList<>();
+    private List<NotificationEntity> notifications = new ArrayList<>();
 
     @ManyToMany
     @JoinTable(name = "\"IncidentKnowledgeDocument\"",
             joinColumns = @JoinColumn(name = "\"incidentId\"", referencedColumnName = "\"id\""),
             inverseJoinColumns = @JoinColumn(name = "\"knowledgeDocumentId\"", referencedColumnName = "\"id\""))
-    private List<KnowledgeDocument> knowledgeDocuments = new ArrayList<>();
+    private List<KnowledgeDocumentEntity> knowledgeDocuments = new ArrayList<>();
 }

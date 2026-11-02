@@ -1,7 +1,7 @@
 package com.leftjoiner.urbanpulse.urbanpulse.entity;
 
-import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.AssetType;
 import jakarta.persistence.*;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -11,41 +11,44 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-import org.locationtech.jts.geom.Geometry;
 
 @Entity
-@Table(name = "\"UrbanAsset\"")
+@Table(name = "\"KnowledgeDocument\"")
 @Getter
 @Setter
 @NoArgsConstructor
-public class UrbanAsset {
+public class KnowledgeDocumentEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "\"id\"", nullable = false, updatable = false)
     private UUID id;
 
-    @Enumerated(EnumType.STRING)
-    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
-    @Column(name = "\"type\"", columnDefinition = "\"AssetType\"")
-    private AssetType type;
+    @Column(name = "\"title\"")
+    private String title;
 
-    @Column(name = "\"code\"")
-    private String code;
+    @Column(name = "\"type\"")
+    private String type;
 
-    @Column(name = "\"name\"")
-    private String name;
+    @Column(name = "\"version\"")
+    private String version;
+
+    @Column(name = "\"content\"", columnDefinition = "text")
+    private String content;
+
+    @Column(name = "\"url\"")
+    private String url;
 
     @Column(name = "\"source\"")
     private String source;
 
-    @Column(name = "\"location\"", columnDefinition = "geometry")
-    private Geometry location;
+    @Column(name = "\"createdAt\"")
+    private LocalDateTime createdAt;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "\"metadata\"", columnDefinition = "json")
     private Map<String, Object> metadata;
 
-    @OneToMany(mappedBy = "urbanAsset")
-    private List<IncidentAssetAssociation> incidentAssociations = new ArrayList<>();
+    @ManyToMany(mappedBy = "knowledgeDocuments")
+    private List<IncidentEntity> incidents = new ArrayList<>();
 }

@@ -46,25 +46,25 @@ class EntityPersistenceIntegrationTest {
     @Test
     @Transactional
     void persistsBothKindsOfIncidentAssociation() {
-        User user = new User();
+        UserEntity user = new UserEntity();
         user.setRole(UserRole.CITIZEN);
         entityManager.persist(user);
 
-        KnowledgeDocument document = new KnowledgeDocument();
+        KnowledgeDocumentEntity document = new KnowledgeDocumentEntity();
         document.setMetadata(Map.of("source", "test"));
         entityManager.persist(document);
 
-        UrbanAsset asset = new UrbanAsset();
+        UrbanAssetEntity asset = new UrbanAssetEntity();
         entityManager.persist(asset);
 
-        Incident incident = new Incident();
+        IncidentEntity incident = new IncidentEntity();
         incident.setUser(user);
         incident.setStatus(IncidentStatus.REPORTED);
         incident.setLocation(new GeometryFactory().createPoint(new Coordinate(-3.7, 40.4)));
         incident.getKnowledgeDocuments().add(document);
         entityManager.persist(incident);
 
-        IncidentAssetAssociation association = new IncidentAssetAssociation();
+        IncidentAssetAssociationEntity association = new IncidentAssetAssociationEntity();
         association.setIncident(incident);
         association.setUrbanAsset(asset);
         association.setConfidence(new BigDecimal("0.8"));
@@ -75,7 +75,7 @@ class EntityPersistenceIntegrationTest {
         entityManager.flush();
         entityManager.clear();
 
-        Incident saved = entityManager.find(Incident.class, incidentId);
+        IncidentEntity saved = entityManager.find(IncidentEntity.class, incidentId);
         assertEquals(1, saved.getKnowledgeDocuments().size());
         assertEquals("test", saved.getKnowledgeDocuments().get(0).getMetadata().get("source"));
         assertEquals(-3.7, ((Point) saved.getLocation()).getX());

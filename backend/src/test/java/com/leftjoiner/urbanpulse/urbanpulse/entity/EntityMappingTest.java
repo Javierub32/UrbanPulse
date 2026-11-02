@@ -15,11 +15,11 @@ class EntityMappingTest {
 
     @Test
     void incidentKnowledgeDocumentsUsesTheSchemaJoinTable() throws NoSuchFieldException {
-        Field field = Incident.class.getDeclaredField("knowledgeDocuments");
+        Field field = IncidentEntity.class.getDeclaredField("knowledgeDocuments");
         JoinTable joinTable = field.getAnnotation(JoinTable.class);
 
         assertEquals(List.class, field.getType());
-        assertEquals(KnowledgeDocument.class,
+        assertEquals(KnowledgeDocumentEntity.class,
                 ((ParameterizedType) field.getGenericType()).getActualTypeArguments()[0]);
         assertNotNull(field.getAnnotation(ManyToMany.class));
         assertNotNull(joinTable);
