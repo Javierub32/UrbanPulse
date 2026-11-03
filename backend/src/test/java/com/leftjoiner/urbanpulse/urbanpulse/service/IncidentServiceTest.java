@@ -6,7 +6,9 @@ import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
 import com.leftjoiner.urbanpulse.urbanpulse.exception.UserNotFoundException;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.IncidentMapper;
+import com.leftjoiner.urbanpulse.urbanpulse.mapper.StatusChangeMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.IncidentRepository;
+import com.leftjoiner.urbanpulse.urbanpulse.repository.StatusChangeRepository;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,7 +24,8 @@ class IncidentServiceTest {
         var incidents = mock(IncidentRepository.class);
         var users = mock(UserRepository.class);
         var mapper = new IncidentMapper();
-        var service = new IncidentService(incidents, users, mapper);
+        var service = new IncidentService(incidents, users, mapper,
+                mock(StatusChangeRepository.class), mock(StatusChangeMapper.class));
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
         when(users.findById(user.getId())).thenReturn(Optional.of(user));
@@ -47,7 +50,8 @@ class IncidentServiceTest {
         var incidents = mock(IncidentRepository.class);
         var users = mock(UserRepository.class);
         var mapper = new IncidentMapper();
-        var service = new IncidentService(incidents, users, mapper);
+        var service = new IncidentService(incidents, users, mapper,
+                mock(StatusChangeRepository.class), mock(StatusChangeMapper.class));
         IncidentRequest request = request(UUID.randomUUID());
         when(users.findById(request.getUserId())).thenReturn(Optional.empty());
         assertThrows(UserNotFoundException.class, () -> service.create(request));
