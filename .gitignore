@@ -38,3 +38,4 @@ node_modules
 # Archivos locales generados en la raíz
 /package-lock.json
 /repomix-output.xml
+expo-env.d.ts
