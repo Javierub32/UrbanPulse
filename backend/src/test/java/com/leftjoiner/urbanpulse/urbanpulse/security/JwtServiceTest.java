@@ -35,7 +35,7 @@ class JwtServiceTest {
         properties.setSecret(Base64.getEncoder().encodeToString("test-only-key-".repeat(6).getBytes(StandardCharsets.UTF_8)));
         properties.setIssuer("urbanpulse");
         properties.setAudience("urbanpulse-api");
-        properties.setAccessTokenTtlSeconds(900);
+        properties.setAccessTokenTtlSeconds(259200);
         JwtConfig config = new JwtConfig();
         key = config.jwtSigningKey(properties);
         service = new JwtService(key, config.jwtParser(key, properties, clock), properties, clock);
@@ -52,10 +52,10 @@ class JwtServiceTest {
         assertEquals("urbanpulse", claims.getIssuer());
         assertEquals(Set.of("urbanpulse-api"), claims.getAudience());
         assertEquals(now, claims.getIssuedAt().toInstant());
-        assertEquals(now.plusSeconds(900), claims.getExpiration().toInstant());
+        assertEquals(now.plusSeconds(259200), claims.getExpiration().toInstant());
         assertNotNull(claims.getId());
         assertEquals(Set.of("sub", "iss", "aud", "iat", "exp", "jti", "role"), claims.keySet());
-        assertEquals(900, service.expiresIn());
+        assertEquals(259200, service.expiresIn());
     }
 
     @Test

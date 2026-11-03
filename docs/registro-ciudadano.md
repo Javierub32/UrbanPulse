@@ -70,6 +70,6 @@ El primer registro devuelve `201`; repetirlo devuelve `409`. Añadir `role` con 
 
 Se habilita mediante el [procedimiento SQL interno](habilitar-personal.md), después de crear una cuenta ciudadana activa y verificar la identidad de su titular. No hay endpoint público para elevar roles ni se implementa la administración general de #10.
 
-Se mantienen tokens de 900 segundos, sin renovación. El registro activa inmediatamente la cuenta, sin verificación de email. Son las reglas de esta entrega; una sesión de varios días, verificación de correo o recuperación de contraseña requerirían otro acuerdo.
+Los tokens duran por defecto 3 días (259200 segundos), sin renovación. El registro activa inmediatamente la cuenta, sin verificación de email. La verificación de correo o la recuperación de contraseña requerirían otro acuerdo.
 
 El resto de permisos del personal se tratará en #10.

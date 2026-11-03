@@ -57,7 +57,7 @@ public class AuthController {
     }
 
     @Operation(summary = "Iniciar sesión", description = "Comprueba la cuenta activa y BCrypt. Devuelve un JWT Bearer "
-            + "con UUID y role del enum UserRole. Caduca a los 900 segundos por defecto, sin renovación automática. "
+            + "con UUID y role del enum UserRole. Caduca a los 259200 segundos (3 días) por defecto, sin renovación automática. "
             + "Un cambio de rol requiere un nuevo login para obtener un token actualizado.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Token y datos públicos del usuario",

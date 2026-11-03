@@ -23,7 +23,7 @@ Respuesta `200`:
 {
   "accessToken": "<JWT firmado>",
   "tokenType": "Bearer",
-  "expiresIn": 900,
+  "expiresIn": 259200,
   "user": {
     "id": "7213eebc-f0fe-4004-a1b8-a510872d460e",
     "name": "Ana García",
@@ -65,7 +65,7 @@ No se incluyen nombre, email ni contraseña. El filtro verifica firma, algoritmo
 
 ### Cambios de rol y cuentas desactivadas
 
-El rol representa el que tenía el usuario al iniciar sesión. Cambiarlo en PostgreSQL no cambia los tokens ya emitidos: el usuario debe salir y volver a entrar para obtener otro. Los tokens antiguos mantienen su rol hasta caducar, incluso tras una reducción de privilegios.
+El rol representa el que tenía el usuario al iniciar sesión. Cambiarlo en PostgreSQL no cambia los tokens ya emitidos: el usuario debe salir y volver a entrar para obtener otro. Los tokens antiguos mantienen su rol hasta caducar, incluso tras una reducción de privilegios. Con la duración predeterminada, esto puede prolongarse hasta 3 días.
 
 `/me` recupera el nombre y email actuales, comprueba la cuenta y devuelve el **rol del JWT**, que es el usado para autorizar. Así la app no muestra un rol distinto al que realmente se aplica.
 
@@ -119,7 +119,7 @@ Alternativa desde la raíz: `docker compose --profile container up --build`. Com
 | `URBANPULSE_JWT_SECRET` | Obligatoria: al menos 32 bytes aleatorios en Base64. Falla el arranque si falta o es inadecuada. |
 | `URBANPULSE_JWT_ISSUER` | Predeterminado `urbanpulse`. |
 | `URBANPULSE_JWT_AUDIENCE` | Predeterminado `urbanpulse-api`. |
-| `URBANPULSE_JWT_TTL_SECONDS` | Se mantiene `900`: 15 minutos. |
+| `URBANPULSE_JWT_TTL_SECONDS` | Predeterminado `259200`: 3 días. |
 | `URBANPULSE_CORS_ALLOWED_ORIGINS` | Orígenes web exactos separados por comas, sin rutas ni comodines. Vacío no admite otros orígenes web. |
 
 Reutilizar la clave entre reinicios y compartirla entre instancias del mismo despliegue. Cambiarla invalida todos los tokens anteriores. El secreto solo se entrega al backend.
@@ -157,7 +157,7 @@ Se guardan únicamente el token y su vencimiento local, nunca contraseñas:
 
 Las escrituras se ejecutan en orden y omiten operaciones de una sesión anterior. Si falla guardar el token, no se completa el login. Si falla borrarlo, se retira la sesión en memoria y se muestra un error para reintentar: no se declara terminado el borrado persistente. En una restauración sin red se conserva el token y se bloquea el acceso hasta verificarlo o elegir salir.
 
-El vencimiento local sirve para la interfaz; el servidor valida la firma y la caducidad real. Borrar el token local no revoca una copia en otro cliente. No hay refresh tokens ni invalidación individual mediante `jti`.
+El vencimiento local sirve para la interfaz; el servidor valida la firma y la caducidad real. Borrar el token local no revoca una copia en otro cliente. No hay refresh tokens ni invalidación individual mediante `jti`; una copia del token puede utilizarse hasta que caduque.
 
 La barra inferior y las pantallas iniciales ya existían en `main`. Se conservan; no proceden de copiar la interfaz de TopFive. Las pantallas nuevas de autenticación están en `src/pages/` y sus rutas en `src/app/`.
 
