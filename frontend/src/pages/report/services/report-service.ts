@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import type { Coordinate } from '../hooks/use-report-location';
+import type { IncidentListItem } from '@/types/incidents';
 
 export const categories = [
   { value: 'PUBLIC_ROAD', label: 'Vía pública' },
@@ -42,4 +43,19 @@ async function post<T>(path: string, data: object): Promise<T> {
 
 export function createIncident(incident: Incident) {
   return post<{ id: string }>('/api/incidents/create', { ...incident, userId: TEST_USER_ID });
+}
+
+export async function getIncidents(signal?: AbortSignal): Promise<IncidentListItem[]> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl()}/api/incidents/public`, { signal });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    throw new Error('No se puede conectar con el servidor. Comprueba la conexión y la dirección de la API.');
+  }
+  if (!response.ok) {
+    if (response.status === 404) throw new Error('No se encuentra el servicio de incidencias.');
+    throw new Error('El servidor no ha podido procesar la solicitud. Inténtalo de nuevo.');
+  }
+  return response.json() as Promise<IncidentListItem[]>;
 }
