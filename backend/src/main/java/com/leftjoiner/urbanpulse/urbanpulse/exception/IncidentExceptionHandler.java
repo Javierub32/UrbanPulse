@@ -25,6 +25,18 @@ public class IncidentExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.NOT_FOUND, "Usuario no encontrado", "No existe el usuario indicado.", "USER_NOT_FOUND");
     }
 
+    @ExceptionHandler(IncidentNotFoundException.class)
+    public ProblemDetail handleIncidentNotFound(IncidentNotFoundException exception) {
+        return problem(HttpStatus.NOT_FOUND, "Incidencia no encontrada",
+                "No existe la incidencia indicada.", "INCIDENT_NOT_FOUND");
+    }
+
+    @ExceptionHandler(InvalidPaginationException.class)
+    public ProblemDetail handleInvalidPagination(InvalidPaginationException exception) {
+        return problem(HttpStatus.BAD_REQUEST, "Paginación no válida",
+                "La página o el tamaño solicitados no son válidos.", "INVALID_PAGINATION");
+    }
+
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException exception, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
