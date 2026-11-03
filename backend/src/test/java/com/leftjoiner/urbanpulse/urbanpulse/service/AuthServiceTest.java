@@ -4,6 +4,7 @@ import com.leftjoiner.urbanpulse.urbanpulse.dto.LoginResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.LoginResponseMapper;
+import com.leftjoiner.urbanpulse.urbanpulse.mapper.RegisterMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,7 +41,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, passwordEncoder, new LoginResponseMapper());
+        authService = new AuthService(userRepository, passwordEncoder, new LoginResponseMapper(), new RegisterMapper());
     }
 
     @Test
