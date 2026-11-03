@@ -1,5 +1,13 @@
 package com.leftjoiner.urbanpulse.urbanpulse.controller;
 
+import com.leftjoiner.urbanpulse.urbanpulse.config.JwtConfig;
+import com.leftjoiner.urbanpulse.urbanpulse.config.SecurityConfig;
+import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
+import com.leftjoiner.urbanpulse.urbanpulse.security.JwtService;
+import com.leftjoiner.urbanpulse.urbanpulse.security.SecurityProblemHandler;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
+
 import com.leftjoiner.urbanpulse.urbanpulse.dto.RegisterResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
 import com.leftjoiner.urbanpulse.urbanpulse.exception.EmailAlreadyRegisteredException;
@@ -36,11 +44,17 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+@ActiveProfiles("test")
+@Import({SecurityConfig.class,
+        JwtConfig.class,
+        JwtService.class,
+        SecurityProblemHandler.class})
 @WebMvcTest(AuthController.class)
 @EnableConfigurationProperties(SpringDocConfigProperties.class)
 @ImportAutoConfiguration({SpringDocConfiguration.class, SpringDocSpecPropertiesConfiguration.class,
         SpringDocWebMvcConfiguration.class})
 class RegisterControllerTest {
+    @MockitoBean private UserRepository userRepository;
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     @Autowired private MockMvc mockMvc;

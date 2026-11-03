@@ -4,7 +4,7 @@ import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentRequest;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
-import com.leftjoiner.urbanpulse.urbanpulse.exception.UserNotFoundException;
+import org.springframework.security.authentication.BadCredentialsException;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.IncidentMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.IncidentRepository;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
@@ -25,10 +25,11 @@ class IncidentServiceTest {
         var service = new IncidentService(incidents, users, mapper);
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
+        user.setActive(true);
         when(users.findById(user.getId())).thenReturn(Optional.of(user));
         when(incidents.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        IncidentRequest request = request(user.getId());
-        var response = service.create(request);
+        IncidentRequest request = request();
+        var response = service.create(request, user.getId());
         assertEquals(user.getId(), response.getUserId());
         assertEquals("Farola", response.getTitle());
         assertEquals(IncidentStatus.REPORTED, response.getStatus());
@@ -48,15 +49,29 @@ class IncidentServiceTest {
         var users = mock(UserRepository.class);
         var mapper = new IncidentMapper();
         var service = new IncidentService(incidents, users, mapper);
-        IncidentRequest request = request(UUID.randomUUID());
-        when(users.findById(request.getUserId())).thenReturn(Optional.empty());
-        assertThrows(UserNotFoundException.class, () -> service.create(request));
+        IncidentRequest request = request();
+        UUID id = UUID.randomUUID();
+        when(users.findById(id)).thenReturn(Optional.empty());
+        assertThrows(BadCredentialsException.class, () -> service.create(request, id));
         verifyNoInteractions(incidents);
     }
 
-    private IncidentRequest request(UUID userId) {
+    @Test
+    void rejectsInactiveOrUnspecifiedAccountStateWithoutSaving() {
+        var incidents = mock(IncidentRepository.class);
+        var users = mock(UserRepository.class);
+        var service = new IncidentService(incidents, users, new IncidentMapper());
+        UserEntity user = new UserEntity();
+        user.setId(UUID.randomUUID());
+        when(users.findById(user.getId())).thenReturn(Optional.of(user));
+        assertThrows(BadCredentialsException.class, () -> service.create(request(), user.getId()));
+        user.setActive(false);
+        assertThrows(BadCredentialsException.class, () -> service.create(request(), user.getId()));
+        verifyNoInteractions(incidents);
+    }
+
+    private IncidentRequest request() {
         IncidentRequest request = new IncidentRequest();
-        request.setUserId(userId);
         request.setTitle(" Farola ");
         request.setDescription(" Apagada ");
         request.setCategory(IncidentCategory.STREET_LIGHTING);

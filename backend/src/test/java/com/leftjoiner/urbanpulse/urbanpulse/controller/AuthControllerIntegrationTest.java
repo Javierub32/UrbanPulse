@@ -1,5 +1,7 @@
 package com.leftjoiner.urbanpulse.urbanpulse.controller;
 
+import org.springframework.test.context.ActiveProfiles;
+
 import com.leftjoiner.urbanpulse.urbanpulse.dto.LoginResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
@@ -44,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @Testcontainers
+@ActiveProfiles("test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "spring.docker.compose.enabled=false")
 class AuthControllerIntegrationTest {
@@ -149,11 +152,12 @@ class AuthControllerIntegrationTest {
         }
     }
 
-    @Test
-    void rejectsInvalidAndPrivilegedRegistrationWithoutSavingAnAccount() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"OPERATOR", "TECHNICIAN", "ADMINISTRATOR", "ANALYST"})
+    void rejectsInvalidAndPrivilegedRegistrationWithoutSavingAnAccount(String role) throws Exception {
         String email = UUID.randomUUID() + "@example.com";
         String body = jsonMapper.writeValueAsString(Map.of("name", "Citizen", "email", email,
-                "password", PASSWORD, "role", "ADMINISTRATOR"));
+                "password", PASSWORD, "role", role));
 
         assertEquals(400, postJson("/api/auth/register", body).statusCode());
         assertEquals(400, postRegister("Citizen", email, "á".repeat(37)).statusCode());
@@ -192,7 +196,7 @@ class AuthControllerIntegrationTest {
         assertEquals(200, response.statusCode());
         assertEquals(jsonMapper.valueToTree(new LoginResponse(
                         user.getId(), user.getName(), user.getEmail(), user.getRole())),
-                jsonMapper.readTree(response.body()));
+                jsonMapper.readTree(response.body()).path("user"));
         assertFalse(response.body().contains(PASSWORD));
         assertFalse(response.body().contains(user.getPasswordHash()));
     }
@@ -262,7 +266,7 @@ class AuthControllerIntegrationTest {
                 user.getEmail().toLowerCase(java.util.Locale.ROOT), PASSWORD);
 
         assertEquals(200, response.statusCode());
-        assertEquals(user.getEmail(), jsonMapper.readTree(response.body()).path("email").asString());
+        assertEquals(user.getEmail(), jsonMapper.readTree(response.body()).path("user").path("email").asString());
     }
 
     @Test

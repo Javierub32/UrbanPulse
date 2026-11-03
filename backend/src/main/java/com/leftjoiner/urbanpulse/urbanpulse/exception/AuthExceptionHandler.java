@@ -19,7 +19,6 @@ public class AuthExceptionHandler extends RequestExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleUnexpectedException(Exception exception) {
-        // Authentication exceptions can contain credentials in their message or cause.
         log.error("Error inesperado de autenticación: {}", exception.getClass().getSimpleName());
         return problem(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno",
                 "No se ha podido procesar la petición.", "INTERNAL_ERROR");

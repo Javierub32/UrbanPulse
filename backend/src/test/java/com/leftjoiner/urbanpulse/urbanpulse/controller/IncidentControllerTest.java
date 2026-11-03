@@ -1,9 +1,24 @@
 package com.leftjoiner.urbanpulse.urbanpulse.controller;
 
+import com.leftjoiner.urbanpulse.urbanpulse.config.JwtConfig;
+import com.leftjoiner.urbanpulse.urbanpulse.config.SecurityConfig;
+import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
+import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
+import com.leftjoiner.urbanpulse.urbanpulse.security.JwtService;
+import com.leftjoiner.urbanpulse.urbanpulse.security.SecurityProblemHandler;
+import com.leftjoiner.urbanpulse.urbanpulse.security.UrbanPulsePrincipal;
+import java.util.List;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
+import org.springframework.test.context.ActiveProfiles;
+
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
-import com.leftjoiner.urbanpulse.urbanpulse.exception.UserNotFoundException;
+import org.springframework.security.authentication.BadCredentialsException;
 import com.leftjoiner.urbanpulse.urbanpulse.service.IncidentService;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -26,11 +41,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+@ActiveProfiles("test")
+@Import({SecurityConfig.class,
+        JwtConfig.class,
+        JwtService.class,
+        SecurityProblemHandler.class})
 @WebMvcTest(IncidentController.class)
 @EnableConfigurationProperties(SpringDocConfigProperties.class)
 @ImportAutoConfiguration({SpringDocConfiguration.class, SpringDocSpecPropertiesConfiguration.class,
         SpringDocWebMvcConfiguration.class})
 class IncidentControllerTest {
+    @MockitoBean private UserRepository userRepository;
+
     @Autowired private MockMvc mockMvc;
     @MockitoBean private IncidentService service;
 
@@ -47,11 +69,11 @@ class IncidentControllerTest {
     @Test
     void createsIncident() throws Exception {
         UUID id = UUID.randomUUID();
-        UUID userId = UUID.randomUUID();
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         IncidentResponse response = new IncidentResponse(id, userId, "Farola", "Apagada", IncidentCategory.STREET_LIGHTING,
                 40.4, -3.7, null, IncidentStatus.REPORTED, null, null);
-        when(service.create(any())).thenReturn(response);
-        mockMvc.perform(post("/api/incidents/create").contentType(MediaType.APPLICATION_JSON)
+        when(service.create(any(), any())).thenReturn(response);
+        mockMvc.perform(post("/api/incidents/create").with(SecurityMockMvcRequestPostProcessors.authentication(citizen())).contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"userId":"%s","title":"Farola","description":"Apagada",
                          "category":"STREET_LIGHTING","latitude":40.4,"longitude":-3.7}
@@ -59,7 +81,7 @@ class IncidentControllerTest {
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.id").value(id.toString()))
                 .andExpect(jsonPath("$.status").value("REPORTED"))
                 .andExpect(jsonPath("$.priority").doesNotExist());
-        verify(service).create(any());
+        verify(service).create(any(), eq(userId));
     }
 
     @ParameterizedTest
@@ -70,14 +92,14 @@ class IncidentControllerTest {
         "{\"userId\":\"00000000-0000-0000-0000-000000000001\",\"title\":\"x\",\"description\":\"x\",\"category\":\"INVALID\",\"latitude\":0,\"longitude\":0}"
     })
     void rejectsInvalidInput(String body) throws Exception {
-        mockMvc.perform(post("/api/incidents/create").contentType(MediaType.APPLICATION_JSON).content(body))
+        mockMvc.perform(post("/api/incidents/create").with(SecurityMockMvcRequestPostProcessors.authentication(citizen())).contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
     }
 
     @Test
     void validationErrorIncludesFieldDetails() throws Exception {
-        mockMvc.perform(post("/api/incidents/create").contentType(MediaType.APPLICATION_JSON).content("{}"))
+        mockMvc.perform(post("/api/incidents/create").with(SecurityMockMvcRequestPostProcessors.authentication(citizen())).contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(400))
@@ -89,7 +111,7 @@ class IncidentControllerTest {
 
     @Test
     void unreadableJsonReturnsProblem() throws Exception {
-        mockMvc.perform(post("/api/incidents/create").contentType(MediaType.APPLICATION_JSON).content("{"))
+        mockMvc.perform(post("/api/incidents/create").with(SecurityMockMvcRequestPostProcessors.authentication(citizen())).contentType(MediaType.APPLICATION_JSON).content("{"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
@@ -97,23 +119,44 @@ class IncidentControllerTest {
     }
 
     @Test
-    void missingUserReturnsProblem() throws Exception {
-        when(service.create(any())).thenThrow(new UserNotFoundException());
-        mockMvc.perform(post("/api/incidents/create").contentType(MediaType.APPLICATION_JSON).content(validBody()))
-                .andExpect(status().isNotFound())
+    void missingOrInactiveAccountReturnsSafe401() throws Exception {
+        when(service.create(any(), any())).thenThrow(new BadCredentialsException("private account state"));
+        mockMvc.perform(post("/api/incidents/create").with(SecurityMockMvcRequestPostProcessors.authentication(citizen())).contentType(MediaType.APPLICATION_JSON).content(validBody()))
+                .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"))
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"))
+                .andExpect(jsonPath("$.detail").value("Inicia sesión con una credencial válida."))
                 .andExpect(jsonPath("$.instance").value("/api/incidents/create"));
     }
 
     @Test
     void unexpectedErrorDoesNotExposeInternalMessage() throws Exception {
-        when(service.create(any())).thenThrow(new IllegalStateException("secret internal detail"));
-        mockMvc.perform(post("/api/incidents/create").contentType(MediaType.APPLICATION_JSON).content(validBody()))
+        when(service.create(any(), any())).thenThrow(new IllegalStateException("secret internal detail"));
+        mockMvc.perform(post("/api/incidents/create").with(SecurityMockMvcRequestPostProcessors.authentication(citizen())).contentType(MediaType.APPLICATION_JSON).content(validBody()))
                 .andExpect(status().isInternalServerError())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
                 .andExpect(jsonPath("$.detail").value("No se ha podido procesar la petición."));
+    }
+
+    @Test
+    void serviceAccessDenialRemains403InsteadOfBecomingAnInternalError() throws Exception {
+        when(service.create(any(), any())).thenThrow(
+                new org.springframework.security.access.AccessDeniedException("private authorization detail"));
+        mockMvc.perform(post("/api/incidents/create")
+                        .with(SecurityMockMvcRequestPostProcessors.authentication(citizen()))
+                        .contentType(MediaType.APPLICATION_JSON).content(validBody()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+                .andExpect(jsonPath("$.detail").value("No tienes permiso para realizar esta operación."));
+    }
+
+    private Authentication citizen() {
+        return UsernamePasswordAuthenticationToken.authenticated(
+                new UrbanPulsePrincipal(
+                        UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                        UserRole.CITIZEN), null,
+                List.of(new SimpleGrantedAuthority("ROLE_CITIZEN")));
     }
 
     private String validBody() {

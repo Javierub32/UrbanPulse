@@ -1,6 +1,8 @@
-# Registro ciudadano · entrega parcial de #9
+# Registro de ciudadanos
 
-## Contrato implementado
+Para crear una cuenta solo hacen falta nombre, correo y contraseña. Una vez registrada, la persona puede volver al login y entrar con esos datos.
+
+## Datos del registro
 
 `POST /api/auth/register` es público y recibe exclusivamente:
 
@@ -13,10 +15,10 @@
 ```
 
 - Nombre obligatorio, máximo 100 caracteres; se eliminan espacios exteriores.
-- Email obligatorio y válido, máximo 254 caracteres; se eliminan espacios exteriores y se conservan las mayúsculas. No se permiten dos cuentas con el mismo email aunque cambien las mayúsculas.
-- Contraseña obligatoria, mínimo 8 caracteres Unicode y máximo 72 bytes UTF-8 por el límite de BCrypt. No se recorta ni transforma; admite espacios. Los caracteres acentuados y emojis pueden ocupar varios bytes.
+- Email obligatorio y válido, máximo 254 caracteres; se eliminan espacios exteriores y se conservan las mayúsculas. La comprobación de duplicados ignora mayúsculas.
+- Contraseña obligatoria, al menos 8 caracteres Unicode y como máximo 72 bytes UTF-8 por BCrypt. No se recorta ni transforma; admite espacios, pero no puede contener solo espacios en blanco. Los acentos y emojis pueden ocupar varios bytes.
 - Se rechazan campos adicionales, incluidos `role`, `active`, `id`, `passwordHash` y `createdAt`.
-- El servidor crea una cuenta `CITIZEN`, activa, con fecha UTC del servidor y contraseña almacenada exclusivamente como hash BCrypt.
+- El servidor asigna `CITIZEN`, `active=true`, fecha UTC y un hash BCrypt. No permite solicitar un rol de personal.
 
 Respuesta `201 application/json`:
 
@@ -29,26 +31,28 @@ Respuesta `201 application/json`:
 }
 ```
 
-El registro no inicia sesión. Después se utiliza el login existente, `POST /api/auth/login`; esta entrega todavía no añade JWT, renovación ni pantallas de la app.
+No devuelve contraseña ni hash y no inicia sesión. La pantalla comprueba también la confirmación de contraseña, vuelve al login y muestra la confirmación. El login devuelve el JWT y el usuario dentro de `user`.
+
+El frontend hace una comprobación básica del correo; la validación final corresponde al backend, que puede devolver el error del campo. Se comprueban las longitudes Unicode y el límite de bytes sin cambiar la contraseña.
 
 ## Errores
 
-Los errores del registro usan `application/problem+json`, con `status`, `title`, `detail`, `instance` y un `code` estable:
+`application/problem+json` con `status`, `title`, `detail`, `instance` y `code`:
 
-| HTTP | `code` | Cuándo ocurre |
+| HTTP | `code` | Caso |
 | --- | --- | --- |
-| 400 | `VALIDATION_ERROR` | Campos ausentes, vacíos o fuera de sus límites. Incluye `errors` con `field`, `code` y `message`, sin devolver el valor introducido. |
+| 400 | `VALIDATION_ERROR` | Campos ausentes, vacíos o fuera de límites. `errors` contiene `field`, `code` y `message`, sin el valor recibido. |
 | 400 | `INVALID_REQUEST` | JSON ilegible, cuerpo nulo o campos adicionales. |
-| 409 | `EMAIL_ALREADY_REGISTERED` | Email existente, también si dos registros simultáneos compiten por el mismo email. |
-| 500 | `INTERNAL_ERROR` | Fallo inesperado, sin detalles internos en la respuesta. |
+| 409 | `EMAIL_ALREADY_REGISTERED` | Email existente, incluidas carreras entre registros simultáneos. |
+| 500 | `INTERNAL_ERROR` | Error inesperado, sin detalles internos. |
 
-Las validaciones HTTP de autenticación reutilizan el mismo formato de errores que incidencias. El login conserva su respuesta de éxito y su `401` con `{"message":"Credenciales inválidas"}`.
+El login conserva su error `401` con `{"message":"Credenciales inválidas"}`. La app admite ambos formatos y muestra los mensajes en español.
 
-Se reutiliza el índice `uq_User_email_ignore_case` de V2. No cambia el esquema ni ninguna migración existente. Una colisión en ese índice se traduce en `409`; otras incidencias de persistencia no se presentan como emails duplicados.
+Se reutiliza el índice `uq_User_email_ignore_case` de V2. No hay migraciones nuevas ni cambios en las existentes. Solo una colisión en ese índice se convierte en `409`.
 
-El contrato también está disponible en `/v3/api-docs` y en Swagger UI (`/swagger-ui.html`).
+## Comprobar el registro
 
-## Comprobación manual con el backend arrancado
+Con el backend configurado y arrancado:
 
 ```bash
 curl -i http://localhost:8080/api/auth/register \
@@ -60,13 +64,12 @@ curl -i http://localhost:8080/api/auth/login \
   -d '{"email":"ana@example.com","password":"una-clave-de-ejemplo"}'
 ```
 
-El primer registro devuelve `201`; repetirlo devuelve `409`. Añadir `"role":"ADMINISTRATOR"` al registro devuelve `400` y no crea la cuenta.
+El primer registro devuelve `201`; repetirlo devuelve `409`. Añadir `role` con cualquiera de los cuatro roles privilegiados devuelve `400` sin crear la cuenta. La sesión, configuración del IDE, CORS y conexión de móvil están en [autenticacion-jwt.md](autenticacion-jwt.md).
 
-## Preguntas agrupadas para Javi antes de continuar con JWT
+## Cuentas de personal
 
-1. **Experiencia de sesión:** ¿el usuario debe volver a introducir su contraseña cuando caduque el token o debe poder mantener la sesión durante días? El segundo caso requiere renovación y cierre de sesión en el backend, además del JWT.
-2. **Duración:** ¿qué duración quiere para el token y, si existe renovación, para la sesión completa? En el plan se propusieron 15 minutos para el token; todavía no se ha fijado ese valor.
-3. **Cuentas de personal:** ¿quién podrá habilitarlas y qué procedimiento interno debe documentarse? El registro público solo crea ciudadanos.
-4. **Revisión del registro:** se han implementado los límites anteriores y la activación inmediata de ciudadanos, sin verificación del correo. ¿Son las reglas que quiere el equipo?
+Se habilita mediante el [procedimiento SQL interno](habilitar-personal.md), después de crear una cuenta ciudadana activa y verificar la identidad de su titular. No hay endpoint público para elevar roles ni se implementa la administración general de #10.
 
-Estas preguntas corresponden a acuerdos del equipo. Esta entrega cubre el registro y sus pruebas; #9 sigue abierto. El README se completará al final, según lo acordado.
+Se mantienen tokens de 900 segundos, sin renovación. El registro activa inmediatamente la cuenta, sin verificación de email. Son las reglas de esta entrega; una sesión de varios días, verificación de correo o recuperación de contraseña requerirían otro acuerdo.
+
+El resto de permisos del personal se tratará en #10.

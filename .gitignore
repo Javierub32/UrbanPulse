@@ -38,3 +38,8 @@ node_modules
 # Archivos locales generados en la raíz
 /package-lock.json
 /repomix-output.xml
+
+# Configuración local con credenciales; los ejemplos sí se comparten.
+/.env
+/.env.*
+!/.env.example

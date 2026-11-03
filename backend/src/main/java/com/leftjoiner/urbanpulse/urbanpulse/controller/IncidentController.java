@@ -4,6 +4,8 @@ import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentRequest;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.ProblemResponseSchema;
 import com.leftjoiner.urbanpulse.urbanpulse.service.IncidentService;
+import com.leftjoiner.urbanpulse.urbanpulse.security.UrbanPulsePrincipal;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -13,6 +15,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -21,19 +24,25 @@ import org.springframework.web.bind.annotation.*;
 public class IncidentController {
     private final IncidentService incidentService;
 
-    @Operation(summary = "Crear una incidencia", description = "Registra una incidencia asociada al usuario indicado.")
+    @Operation(summary = "Crear una incidencia", description = "Registra una incidencia del ciudadano autenticado. "
+            + "El autor se obtiene del JWT y debe seguir activo al recuperarlo en el servicio. "
+            + "userId no forma parte de la entrada y, si se envía, se ignora.",
+            security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Incidencia creada",
                 content = @Content(mediaType = "application/json", schema = @Schema(implementation = IncidentResponse.class))),
         @ApiResponse(responseCode = "400", description = "Datos de entrada no válidos",
                 content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
-        @ApiResponse(responseCode = "404", description = "Usuario no encontrado",
+        @ApiResponse(responseCode = "401", description = "UNAUTHENTICATED: token ausente, no válido o caducado; cuenta inexistente o inactiva",
+                content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
+        @ApiResponse(responseCode = "403", description = "ACCESS_DENIED: la creación está reservada a ciudadanos",
                 content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
         @ApiResponse(responseCode = "500", description = "Error inesperado",
                 content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class)))
     })
     @PostMapping("/create")
-    public ResponseEntity<IncidentResponse> create(@Valid @RequestBody IncidentRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(incidentService.create(request));
+    public ResponseEntity<IncidentResponse> create(@Valid @RequestBody IncidentRequest request,
+            @AuthenticationPrincipal UrbanPulsePrincipal principal) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(incidentService.create(request, principal.getId()));
     }
 }

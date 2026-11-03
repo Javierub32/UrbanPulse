@@ -1,5 +1,8 @@
 package com.leftjoiner.urbanpulse.urbanpulse.service;
 
+import com.leftjoiner.urbanpulse.urbanpulse.security.JwtService;
+import org.mockito.Mockito;
+
 import com.leftjoiner.urbanpulse.urbanpulse.dto.RegisterRequest;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.RegisterResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
@@ -36,7 +39,8 @@ class AuthRegistrationServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, passwordEncoder, new LoginResponseMapper(), new RegisterMapper());
+        authService = new AuthService(userRepository, passwordEncoder, new LoginResponseMapper(), new RegisterMapper(),
+                Mockito.mock(JwtService.class));
     }
 
     @Test
