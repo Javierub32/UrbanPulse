@@ -36,7 +36,7 @@ class UserEmailMigrationIntegrationTest {
         String database = "email_migration_" + UUID.randomUUID().toString().replace("-", "");
         try (Connection connection = DriverManager.getConnection(
                 postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
-             var statement = connection.createStatement()) {
+                var statement = connection.createStatement()) {
             statement.execute("CREATE DATABASE " + database);
         }
         databaseUrl = "jdbc:postgresql://" + postgres.getHost() + ":"
@@ -45,7 +45,7 @@ class UserEmailMigrationIntegrationTest {
         Flyway.configure().dataSource(databaseUrl, postgres.getUsername(), postgres.getPassword())
                 .target("1").load().migrate();
         flyway = Flyway.configure()
-                .dataSource(databaseUrl, postgres.getUsername(), postgres.getPassword()).load();
+                .dataSource(databaseUrl, postgres.getUsername(), postgres.getPassword()).target("2").load();
     }
 
     @Test
@@ -56,8 +56,8 @@ class UserEmailMigrationIntegrationTest {
 
         assertEquals("2", flyway.info().current().getVersion().getVersion());
         try (Connection connection = connection();
-             var statement = connection.createStatement();
-             var rows = statement.executeQuery("SELECT \"email\", \"passwordHash\" FROM \"User\"")) {
+                var statement = connection.createStatement();
+                var rows = statement.executeQuery("SELECT \"email\", \"passwordHash\" FROM \"User\"")) {
             assertTrue(rows.next());
             assertEquals("Citizen@Example.com", rows.getString("email"));
             assertEquals("stored-hash", rows.getString("passwordHash"));
@@ -69,7 +69,7 @@ class UserEmailMigrationIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"citizen@example.com", "CITIZEN@EXAMPLE.COM"})
+    @ValueSource(strings = { "citizen@example.com", "CITIZEN@EXAMPLE.COM" })
     void refusesExistingDuplicatesWithoutDeletingData(String secondEmail) throws SQLException {
         insertUser("citizen@example.com");
         insertUser(secondEmail);
@@ -79,8 +79,8 @@ class UserEmailMigrationIntegrationTest {
         assertTrue(exception.getMessage().contains("uq_User_email_ignore_case"));
         assertEquals("1", flyway.info().current().getVersion().getVersion());
         try (Connection connection = connection();
-             var statement = connection.createStatement();
-             var rows = statement.executeQuery("SELECT count(*) FROM \"User\"")) {
+                var statement = connection.createStatement();
+                var rows = statement.executeQuery("SELECT count(*) FROM \"User\"")) {
             assertTrue(rows.next());
             assertEquals(2, rows.getInt(1));
         }
@@ -88,8 +88,8 @@ class UserEmailMigrationIntegrationTest {
 
     private void insertUser(String email) throws SQLException {
         try (Connection connection = connection();
-             var statement = connection.prepareStatement(
-                     "INSERT INTO \"User\" (\"email\", \"passwordHash\") VALUES (?, ?)")) {
+                var statement = connection.prepareStatement(
+                        "INSERT INTO \"User\" (\"email\", \"passwordHash\") VALUES (?, ?)")) {
             statement.setString(1, email);
             statement.setString(2, "stored-hash");
             statement.executeUpdate();
