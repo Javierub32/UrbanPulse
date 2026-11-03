@@ -45,7 +45,9 @@ public class IncidentMapper extends MapperDTO<IncidentResponse, IncidentEntity> 
             incident.getTitle(),
             incident.getCategory(),
             incident.getStatus(),
-            incident.getRegisteredAt()
+            incident.getRegisteredAt(),
+            latitude,
+            longitude
         );
     }
 }
