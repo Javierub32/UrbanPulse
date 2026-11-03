@@ -5,7 +5,7 @@ import { ApiError, apiRequest, setApiSession } from '../src/services/api-client.
 import { createSessionWriter, readStoredSession, passwordBytes, validateRegistration } from '../src/services/session.ts';
 
 registerHooks({ resolve(specifier, context, nextResolve) {
-  return nextResolve(specifier === './api-client' ? './api-client.ts' : specifier, context);
+  return nextResolve(specifier === './api-client' ? './api-client.ts' : specifier === '@/services/api-client' ? new URL('../src/services/api-client.ts', import.meta.url).href : specifier, context);
 } });
 const authService = await import('../src/services/auth-service.ts');
 const webStorage = await import('../src/services/token-storage.ts');
@@ -189,4 +189,18 @@ test('otro intento de login limpia un guardado anterior aunque sus credenciales 
   globalThis.fetch = async () => Response.json({ message: 'Credenciales inválidas' }, { status: 401 });
   await assert.rejects(authService.signIn('otra@example.com', 'incorrecta'));
   assert.equal(value, null);
+});
+
+
+test('el formulario de incidencias usa Bearer y no envía un usuario de prueba', async () => {
+  const { createIncident } = await import('../src/pages/report/services/report-service.ts');
+  const incident = { title: 'Farola', description: 'Apagada', category: 'STREET_LIGHTING', latitude: 40.4, longitude: -3.7 };
+  setApiSession('token-ciudadano');
+  globalThis.fetch = async (url, options) => {
+    assert.ok(url.endsWith('/api/incidents/create'));
+    assert.equal(options.headers.get('Authorization'), 'Bearer token-ciudadano');
+    assert.deepEqual(JSON.parse(options.body), incident);
+    return Response.json({ id: 'incidencia' }, { status: 201 });
+  };
+  assert.deepEqual(await createIncident(incident), { id: 'incidencia' });
 });
