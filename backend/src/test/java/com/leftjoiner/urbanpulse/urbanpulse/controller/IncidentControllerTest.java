@@ -22,6 +22,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -42,6 +43,28 @@ class IncidentControllerTest {
                 .andExpect(jsonPath("$.paths['/api/incidents/create'].post.responses['400'].content['application/problem+json']").exists())
                 .andExpect(jsonPath("$.components.schemas.ProblemResponse.properties.code").exists())
                 .andExpect(jsonPath("$.components.schemas.ProblemResponse.properties.errors").exists());
+    }
+
+    @Test
+    void allowsLocalFrontendPreflight() throws Exception {
+        mockMvc.perform(options("/api/incidents/create")
+                        .header("Origin", "http://localhost:8081")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "content-type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:8081"))
+                .andExpect(header().string("Access-Control-Allow-Methods", org.hamcrest.Matchers.containsString("POST")))
+                .andExpect(header().string("Access-Control-Allow-Headers", org.hamcrest.Matchers.containsString("content-type")));
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void rejectsOtherOrigins() throws Exception {
+        mockMvc.perform(options("/api/incidents/create")
+                        .header("Origin", "http://other.example")
+                        .header("Access-Control-Request-Method", "POST"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(service);
     }
 
     @Test
