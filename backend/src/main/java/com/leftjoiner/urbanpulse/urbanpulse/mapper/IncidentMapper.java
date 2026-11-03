@@ -30,4 +30,15 @@ public class IncidentMapper extends MapperDTO<IncidentResponse, IncidentEntity> 
                 incident.getDescription(), incident.getCategory(), location.getY(), location.getX(),
                 incident.getPriority(), incident.getStatus(), incident.getRegisteredAt(), incident.getUpdatedAt());
     }
+
+    public IncidentSummaryResponse toSummaryDTO(IncidentEntity incident){
+        if (incident == null) return null;
+        return new IncidentSummaryResponse(
+            incident.getId(),
+            incident.getTitle(),
+            incident.getCategory(),
+            incident.getStatus(),
+            incident.getRegisteredAt()
+        );
+    }
 }
