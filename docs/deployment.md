@@ -8,29 +8,37 @@ El despliegue cloud y la distribución del frontend todavía están pendientes d
 
 Necesitas Docker en ejecución, Docker Compose v2 y el repositorio clonado. Los puertos 8080 y 5432 deben estar disponibles.
 
-Desde la raíz del proyecto, crea un .env con la contraseña de la base de datos:
+Desde la raíz del proyecto, crea un `.env` con la contraseña de la base de datos:
 
+```dotenv
 POSTGRES_PASSWORD=tu-contraseña-del-entorno
+```
 
-Antes de desplegar una versión, comprueba que corresponde al cambio revisado y que ha superado las pruebas. Puedes ejecutar la suite del backend desde backend/.
+Antes de desplegar una versión, comprueba que corresponde al cambio revisado y que ha superado las pruebas. Puedes ejecutar la suite del backend desde `backend/`.
 
 En Windows:
 
+```powershell
 .\mvnw.cmd test
+```
 
 En macOS/linux:
 
+```bash
 bash ./mvnw test
+```
 
 ## Construir y arrancar
 
 Desde la raíz:
 
+```bash
 docker compose --profile container up --build -d
+```
 
-El perfil container incluye la API. Sin ese perfil, Compose solo arranca la base de datos.
+El perfil `container` incluye la API. Sin ese perfil, Compose solo arranca la base de datos.
 
-El Dockerfile del backend compila la aplicación con Maven y Java 17. Después copia el JAR a una imagen con el entorno de ejecución de Java.
+El [`Dockerfile` del backend](../backend/Dockerfile) compila la aplicación con Maven y Java 17. Después copia el JAR a una imagen con el entorno de ejecución de Java.
 
 La construcción de la imagen omite los tests, por lo que deben haberse ejecutado antes.
 
@@ -40,41 +48,51 @@ Compose espera a que la base de datos esté preparada antes de iniciar la API. D
 
 Consulta el estado de los servicios:
 
+```bash
 docker compose --profile container ps
+```
 
 Comprueba la salud de la API:
 
+```bash
 curl -i http://localhost:8080/actuator/health
+```
 
-La respuesta debe tener estado HTTP 200 y mostrar "status":"UP".
+La respuesta debe tener estado HTTP 200 y mostrar `"status":"UP"`.
 
 Para revisar los logs:
 
+```bash
 docker compose --profile container logs -f api
+```
 
 Comprueba también que puedes consultar las incidencias desde la app y que la API responde a las operaciones que necesita la versión desplegada.
 
 ## Datos y configuración
 
-La base utiliza el volumen urbanpulse-db para conservar los datos entre arranques. Detener los contenedores no borra ese volumen.
+La base utiliza el volumen `urbanpulse-db` para conservar los datos entre arranques. Detener los contenedores no borra ese volumen.
 
 Las migraciones actuales cargan datos sintéticos de demostración. Antes de utilizar este procedimiento con datos reales habrá que revisar esa carga inicial.
 
-La API recibe la conexión a PostgreSQL mediante SPRING_DATASOURCE_URL, SPRING_DATASOURCE_USERNAME y SPRING_DATASOURCE_PASSWORD. Compose configura estas variables para que la API acceda al servicio db.
+La API recibe la conexión a PostgreSQL mediante `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` y `SPRING_DATASOURCE_PASSWORD`. Compose configura estas variables para que la API acceda al servicio `db`.
 
 ## Actualizar y detener
 
 Para actualizar el entorno, sitúa el repositorio en la versión revisada que quieras ejecutar y repite:
 
+```bash
 docker compose --profile container up --build -d
+```
 
 Después vuelve a comprobar la salud del servidor y las operaciones principales. Este procedimiento puede interrumpir temporalmente la API.
 
 Para detener los servicios:
 
+```bash
 docker compose --profile container down
+```
 
-No añadas -v si quieres conservar la base de datos.
+No añadas `-v` si quieres conservar la base de datos.
 
 ## Recuperación ante fallos
 

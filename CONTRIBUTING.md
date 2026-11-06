@@ -6,17 +6,19 @@ Si encuentras un fallo, abre un issue indicando qué estabas haciendo, qué resu
 
 ## Preparar un cambio
 
-Parte de una versión actualizada de main y crea una rama para tu tarea:
+Parte de una versión actualizada de `main` y crea una rama para tu tarea:
 
+```bash
 git switch main
 git pull
 git switch -c docs/guia-desarrollo
+```
 
-El nombre debe ayudar a identificar el cambio. Usamos prefijos como feature/, fix/, docs/, refactor/ y test/.
+El nombre debe ayudar a identificar el cambio. Usamos prefijos como `feature/`, `fix/`, `docs/`, `refactor/` y `test/`.
 
 Procura que cada rama tenga un objetivo concreto. Si al trabajar encuentras otro problema que no está relacionado, puedes abrir un issue para tratarlo por separado.
 
-La preparación del entorno y los comandos para ejecutar el proyecto están en docs/development.md.
+La preparación del entorno y los comandos para ejecutar el proyecto están en la [guía de desarrollo](docs/development.md).
 
 ## Commits
 
@@ -33,28 +35,36 @@ Los tipos mas habituales son feat, fix, docs, test, refactor y chore. Es preferi
 
 Revisa el diff y comprueba que solo contiene los cambios de la tarea.
 
-Si has modificado el backend, ejecuta desde backend/:
+Si has modificado el backend, ejecuta desde `backend/`:
 
 En Windows:
 
+```powershell
 .\mvnw.cmd test
+```
 
-Si no usas windows: bash ./mvnw test
+En macOS/Linux:
+
+```bash
+bash ./mvnw test
+```
 
 Docker debe estar en ejecución para las pruebas de integración que utilizan Testcontainers.
 
-Si has modificado el frontend, comprueba los tipos desde frontend/:
+Si has modificado el frontend, comprueba los tipos desde `frontend/`:
 
+```bash
 npx tsc --noEmit
+```
 
 Prueba también las pantallas afectadas. Si cambias una llamada a la API, revisa tanto la petición de la app como la respuesta del backend.
 
-Actualiza la documentación cuando cambien los pasos de ejecución, la configuración o el comportamiento del proyecto. No incluyas contraseñas, tokens ni ficheros .env en el commit.
+Actualiza la documentación cuando cambien los pasos de ejecución, la configuración o el comportamiento del proyecto. No incluyas contraseñas, tokens ni ficheros `.env` en el commit.
 
 ## Abrir y revisar la pull request
 
-Sube tu rama y abre una pull request hacia main. El repositorio incluye una plantilla para explicar qué cambia, por qué y cómo lo has probado. Si afecta a la interfaz, añade capturas que ayuden a revisar el resultado.
+Sube tu rama y abre una pull request hacia `main`. El repositorio incluye una [plantilla de PR](.github/pull_request_template.md) para explicar qué cambia, por qué y cómo lo has probado. Si afecta a la interfaz, añade capturas que ayuden a revisar el resultado.
 
-Relaciona la PR con su issue cuando corresponda, por ejemplo con Closes #12.
+Relaciona la PR con su issue cuando corresponda, por ejemplo con `Closes #12`.
 
-GitHub Actions ejecuta los tests del backend en las pull requests dirigidas a main. Revisa el resultado y resuelve los fallos antes de integrar el cambio. Solicita revisión a otro miembro del equipo y atiende los comentarios que queden pendientes.
+GitHub Actions ejecuta los tests del backend en las pull requests dirigidas a `main`. Revisa el resultado y resuelve los fallos antes de integrar el cambio. Solicita revisión a otro miembro del equipo y atiende los comentarios que queden pendientes.
