@@ -28,7 +28,7 @@ Las conversiones entre entidades y DTO se realizan en `mapper`. La carpeta `exce
 
 Por ejemplo, al crear una incidencia, el controlador valida la petición y la pasa al servicio. El servicio comprueba que el usuario existe, prepara la incidencia con su estado inicial y la guarda a través del repositorio. La respuesta se construye con un DTO.
 
-La API dispone de un endpoint de login que comprueba las credenciales. La integración de la identidad del usuario en el flujo de la app sigue pendiente: el envío de incidencias utiliza por ahora un usuario sintético de demostración, proximamente integraremos el login con jwt a todo el proyecto.
+La app permite registrarse e iniciar sesión mediante JWT. Al crear una incidencia, la API obtiene el autor del token y comprueba que la cuenta sigue activa. El listado público permite consultar las incidencias sin autenticación. Los detalles están en [autenticacion-jwt.md](autenticacion-jwt.md).
 
 ## Organización del frontend
 

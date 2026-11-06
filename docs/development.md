@@ -69,7 +69,7 @@ POSTGRES_PASSWORD=tu-contraseña-local
 
 Compose utiliza ese valor para la base de datos y para la API en contenedor. Cuando ejecutas con Maven, la integración de Spring Boot con Compose obtiene los datos de conexión.
 
-El fichero `.env.example` de la raíz está vacío actualmente. IMPORTANTE: No incluir tu `.env` en el repositorio.
+El fichero `.env.example` de la raíz documenta la configuración de Compose. La API también requiere `URBANPULSE_JWT_SECRET`; consulta [la guía de autenticación](autenticacion-jwt.md) para generar y configurar la clave. Al ejecutar con Maven, define la variable en el entorno del proceso Java: Spring Boot no carga el `.env` de la raíz. No incluyas el fichero `.env` en el repositorio.
 
 Si la base ya se había creado, cambiar el `.env` no modifica la contraseña guardada en PostgreSQL. Tendrás que utilizar la contraseña original o actualizarla en la base de datos.
 
@@ -149,7 +149,7 @@ Existe un comando `npm run lint`, aunque la configuración de ESLint todavía es
 
 Para una comprobación manual, arranca la API y la app, consulta el listado y el mapa, y registra una incidencia. Comprueba que aparece después de volver a consultar los datos.
 
-La app utiliza actualmente un usuario sintético creado por la migración V4 para enviar los avisos.
+Para enviar avisos, registra una cuenta e inicia sesión: el backend obtiene el autor del token. El listado público no requiere autenticación.
 
 ## Consultar la API
 
