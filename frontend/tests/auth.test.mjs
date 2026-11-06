@@ -204,3 +204,29 @@ test('el formulario de incidencias usa Bearer y no envía un usuario de prueba',
   };
   assert.deepEqual(await createIncident(incident), { id: 'incidencia' });
 });
+
+test('el listado público usa el cliente común sin enviar el token', async () => {
+  const { getIncidents } = await import('../src/pages/report/services/report-service.ts');
+  const incidents = [{ id: '1', title: 'Farola', latitude: 40.4, longitude: -3.7 }];
+  setApiSession('token-ciudadano');
+  globalThis.fetch = async (url, options) => {
+    assert.ok(url.endsWith('/api/incidents/public'));
+    assert.equal(options.headers.get('Authorization'), null);
+    return Response.json(incidents);
+  };
+  assert.deepEqual(await getIncidents(), incidents);
+});
+
+test('el listado cancela la petición cuando la pantalla deja de estar activa', async () => {
+  const { getIncidents } = await import('../src/pages/report/services/report-service.ts');
+  const caller = new AbortController();
+  let requestSignal;
+  globalThis.fetch = (_url, options) => new Promise((_resolve, reject) => {
+    requestSignal = options.signal;
+    options.signal.addEventListener('abort', () => reject(new Error('abortada')), { once: true });
+  });
+  const request = getIncidents(caller.signal);
+  caller.abort();
+  assert.equal(requestSignal.aborted, true);
+  await assert.rejects(request, error => error instanceof ApiError && error.status === 0);
+});

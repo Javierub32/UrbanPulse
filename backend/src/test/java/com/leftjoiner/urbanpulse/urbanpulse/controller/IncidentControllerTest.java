@@ -16,6 +16,7 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.context.ActiveProfiles;
 
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentResponse;
+import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentListItemResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -56,6 +57,29 @@ class IncidentControllerTest {
 
     @Autowired private MockMvc mockMvc;
     @MockitoBean private IncidentService service;
+
+    @Test
+    void publicListIsAvailableWithoutAuthenticationAndReturnsMapCoordinates() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.listAllPublicIncidents()).thenReturn(List.of(
+                new IncidentListItemResponse(id, "Farola", IncidentCategory.STREET_LIGHTING,
+                        IncidentStatus.REPORTED, null, 40.4, -3.7)));
+
+        mockMvc.perform(get("/api/incidents/public").header("Origin", "http://localhost:8081"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:8081"))
+                .andExpect(jsonPath("$[0].id").value(id.toString()))
+                .andExpect(jsonPath("$[0].latitude").value(40.4))
+                .andExpect(jsonPath("$[0].longitude").value(-3.7));
+        verify(service).listAllPublicIncidents();
+    }
+
+    @Test
+    void creatingAnIncidentStillRequiresAuthentication() throws Exception {
+        mockMvc.perform(post("/api/incidents/create").contentType(MediaType.APPLICATION_JSON).content(validBody()))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(service);
+    }
 
     @Test
     void exposesDocumentedIncidentResponses() throws Exception {

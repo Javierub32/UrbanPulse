@@ -6,7 +6,9 @@ import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
 import org.springframework.security.authentication.BadCredentialsException;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.IncidentMapper;
+import com.leftjoiner.urbanpulse.urbanpulse.mapper.StatusChangeMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.IncidentRepository;
+import com.leftjoiner.urbanpulse.urbanpulse.repository.StatusChangeRepository;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,7 +24,8 @@ class IncidentServiceTest {
         var incidents = mock(IncidentRepository.class);
         var users = mock(UserRepository.class);
         var mapper = new IncidentMapper();
-        var service = new IncidentService(incidents, users, mapper);
+        var service = new IncidentService(incidents, users, mapper,
+                mock(StatusChangeRepository.class), mock(StatusChangeMapper.class));
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
         user.setActive(true);
@@ -48,7 +51,8 @@ class IncidentServiceTest {
         var incidents = mock(IncidentRepository.class);
         var users = mock(UserRepository.class);
         var mapper = new IncidentMapper();
-        var service = new IncidentService(incidents, users, mapper);
+        var service = new IncidentService(incidents, users, mapper,
+                mock(StatusChangeRepository.class), mock(StatusChangeMapper.class));
         IncidentRequest request = request();
         UUID id = UUID.randomUUID();
         when(users.findById(id)).thenReturn(Optional.empty());
@@ -60,7 +64,8 @@ class IncidentServiceTest {
     void rejectsInactiveOrUnspecifiedAccountStateWithoutSaving() {
         var incidents = mock(IncidentRepository.class);
         var users = mock(UserRepository.class);
-        var service = new IncidentService(incidents, users, new IncidentMapper());
+        var service = new IncidentService(incidents, users, new IncidentMapper(),
+                mock(StatusChangeRepository.class), mock(StatusChangeMapper.class));
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
         when(users.findById(user.getId())).thenReturn(Optional.of(user));

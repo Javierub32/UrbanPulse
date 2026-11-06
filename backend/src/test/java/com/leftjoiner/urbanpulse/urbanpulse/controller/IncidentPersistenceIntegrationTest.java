@@ -79,5 +79,18 @@ class IncidentPersistenceIntegrationTest {
         assertEquals(4326, point.getSRID());
         assertEquals(-3.7, point.getX());
         assertEquals(40.4, point.getY());
+
+        String publicList = mockMvc.perform(get("/api/incidents/public"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var entries = JsonMapper.builder().build().readTree(publicList);
+        boolean found = false;
+        for (var entry : entries) {
+            if (id.toString().equals(entry.path("id").asString())) {
+                assertEquals(40.4, entry.path("latitude").asDouble());
+                assertEquals(-3.7, entry.path("longitude").asDouble());
+                found = true;
+            }
+        }
+        assertTrue(found, "La incidencia creada debe aparecer en el listado público");
     }
 }

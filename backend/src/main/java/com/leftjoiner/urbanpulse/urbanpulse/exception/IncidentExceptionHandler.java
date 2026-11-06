@@ -16,6 +16,18 @@ public class IncidentExceptionHandler extends RequestExceptionHandler {
         return problem(HttpStatus.NOT_FOUND, "Usuario no encontrado", "No existe el usuario indicado.", "USER_NOT_FOUND");
     }
 
+    @ExceptionHandler(IncidentNotFoundException.class)
+    public ProblemDetail handleIncidentNotFound(IncidentNotFoundException exception) {
+        return problem(HttpStatus.NOT_FOUND, "Incidencia no encontrada",
+                "No existe la incidencia indicada.", "INCIDENT_NOT_FOUND");
+    }
+
+    @ExceptionHandler(InvalidPaginationException.class)
+    public ProblemDetail handleInvalidPagination(InvalidPaginationException exception) {
+        return problem(HttpStatus.BAD_REQUEST, "Paginación no válida",
+                "La página o el tamaño solicitados no son válidos.", "INVALID_PAGINATION");
+    }
+
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleUnexpectedException(Exception exception) {
         log.error("Error inesperado al procesar una incidencia", exception);

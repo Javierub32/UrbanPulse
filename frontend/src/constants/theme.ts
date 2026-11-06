@@ -18,6 +18,8 @@ export const Colors = {
     accentText: '#FFFFFF',
     error: '#B42318',
     border: '#C7CBCC',
+    accentSurface: '#117D73',
+    accentContrast: '#FFFFFF',
   },
   dark: {
     text: '#ffffff',
@@ -29,6 +31,8 @@ export const Colors = {
     accentText: '#102A27',
     error: '#FFB4AB',
     border: '#50585B',
+    accentSurface: '#168F84',
+    accentContrast: '#FFFFFF',
   },
 } as const;
 

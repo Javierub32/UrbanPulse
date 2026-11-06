@@ -1,5 +1,6 @@
 import { apiRequest } from '@/services/api-client';
 import type { Coordinate } from '../hooks/use-report-location';
+import type { IncidentListItem } from '@/types/incidents';
 
 export const categories = [
   { value: 'PUBLIC_ROAD', label: 'Vía pública' },
@@ -16,4 +17,8 @@ type Incident = Coordinate & { title: string; description: string; category: Cat
 
 export function createIncident(incident: Incident) {
   return apiRequest<{ id: string }>('/api/incidents/create', { method: 'POST', body: JSON.stringify(incident) });
+}
+
+export async function getIncidents(signal?: AbortSignal): Promise<IncidentListItem[]> {
+  return apiRequest<IncidentListItem[]>('/api/incidents/public', { signal }, false);
 }

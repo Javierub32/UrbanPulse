@@ -41,6 +41,7 @@ Los datos públicos del antiguo login están ahora dentro de `user`. La app ya c
 | `POST /api/auth/login` | Público; comprueba la cuenta y BCrypt. |
 | `GET /api/auth/me` | JWT válido; recupera la cuenta y comprueba existencia, actividad y que tenga rol. |
 | `POST /api/incidents/create` | JWT con rol `CITIZEN`; el servicio recupera al autor y exige que siga activo. |
+| `GET /api/incidents/public` | Público; devuelve los datos necesarios para el listado y el mapa. |
 | `GET /actuator/health` | Público. |
 | OpenAPI y Swagger UI | Consulta pública. |
 | Otras rutas | Denegadas en esta entrega; no se anticipan los permisos de #10. |

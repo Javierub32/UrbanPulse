@@ -38,6 +38,10 @@ export async function apiRequest<T>(
   const token = authenticated ? accessToken : null;
   const requestVersion = sessionVersion;
   const controller = new AbortController();
+  const externalSignal = options.signal;
+  const abortFromCaller = () => controller.abort();
+  if (externalSignal?.aborted) controller.abort();
+  else externalSignal?.addEventListener("abort", abortFromCaller, { once: true });
   if (token) pending.add(controller);
   const timeout = setTimeout(() => controller.abort(), 15000);
   const headers = new Headers(options.headers);
@@ -87,6 +91,7 @@ export async function apiRequest<T>(
     );
   } finally {
     clearTimeout(timeout);
+    externalSignal?.removeEventListener("abort", abortFromCaller);
     pending.delete(controller);
   }
 }
