@@ -12,7 +12,10 @@ Desde la raíz del proyecto, crea un `.env` con la contraseña de la base de dat
 
 ```dotenv
 POSTGRES_PASSWORD=tu-contraseña-del-entorno
+URBANPULSE_JWT_SECRET=tu-clave-base64
 ```
+
+La clave JWT debe ser aleatoria y contener al menos 32 bytes antes de codificarse en Base64. Consulta [la guía de autenticación](autenticacion-jwt.md) para generarla; no guardes el fichero `.env` en el repositorio.
 
 Antes de desplegar una versión, comprueba que corresponde al cambio revisado y que ha superado las pruebas. Puedes ejecutar la suite del backend desde `backend/`.
 

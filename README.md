@@ -39,7 +39,9 @@ Si quieres usar otra contraseña, crea un fichero `.env` en la raíz con este co
 POSTGRES_PASSWORD=urbanpulse-local
 ```
 
-Compose lee ese fichero y pasa la misma contraseña a la base de datos y a la API. El `.env` es configuración local; no lo incluyas en el commit. El fichero `.env.example` está vacío por ahora.
+Compose lee ese fichero y pasa la misma contraseña a la base de datos y a la API. El `.env` es configuración local; no lo incluyas en el commit. El fichero `.env.example` documenta las variables disponibles.
+
+La API requiere también `URBANPULSE_JWT_SECRET`: añade al `.env` una clave aleatoria en Base64 de al menos 32 bytes. Consulta [la guía de autenticación](docs/autenticacion-jwt.md) para generarla y configurar el acceso desde la app.
 
 ### 3. Arrancar la API y PostGIS
 

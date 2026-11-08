@@ -1,5 +1,9 @@
 package com.leftjoiner.urbanpulse.urbanpulse.controller;
 
+import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
+import com.leftjoiner.urbanpulse.urbanpulse.security.JwtService;
+import org.springframework.test.context.ActiveProfiles;
+
 import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.IncidentRepository;
@@ -26,6 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @Testcontainers
+@ActiveProfiles("test")
 @SpringBootTest(properties = "spring.docker.compose.enabled=false")
 @AutoConfigureMockMvc
 class IncidentPersistenceIntegrationTest {
@@ -38,6 +43,7 @@ class IncidentPersistenceIntegrationTest {
     }
     @Autowired MockMvc mockMvc;
     @Autowired UserRepository users;
+    @Autowired JwtService jwtService;
     @Autowired IncidentRepository incidents;
 
     @Test
@@ -46,7 +52,7 @@ class IncidentPersistenceIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/incidents/create'].post.responses['201']").exists())
                 .andExpect(jsonPath("$.paths['/api/incidents/create'].post.responses['400'].content['application/problem+json']").exists())
-                .andExpect(jsonPath("$.paths['/api/incidents/create'].post.responses['404']").exists())
+                .andExpect(jsonPath("$.paths['/api/incidents/create'].post.responses['401']").exists())
                 .andExpect(jsonPath("$.paths['/api/incidents/create'].post.responses['500']").exists())
                 .andExpect(jsonPath("$.components.schemas.ProblemResponse.properties.code").exists())
                 .andExpect(jsonPath("$.components.schemas.ProblemResponse.properties.errors").exists());
@@ -54,12 +60,15 @@ class IncidentPersistenceIntegrationTest {
 
     @Test
     void createsAndReadsIncidentFromPostgis() throws Exception {
-        UserEntity user = users.saveAndFlush(new UserEntity());
-        String body = mockMvc.perform(post("/api/incidents/create").contentType(MediaType.APPLICATION_JSON)
+        UserEntity user = new UserEntity();
+        user.setActive(true);
+        user.setRole(UserRole.CITIZEN);
+        user = users.saveAndFlush(user);
+        String body = mockMvc.perform(post("/api/incidents/create").header("Authorization", "Bearer " + jwtService.issue(user.getId(), user.getRole())).contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                    {"userId":"%s","title":"Farola","description":"Apagada",
+                    {"title":"Farola","description":"Apagada",
                      "category":"STREET_LIGHTING","latitude":40.4,"longitude":-3.7}
-                    """.formatted(user.getId())))
+                    """))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         UUID id = UUID.fromString(JsonMapper.builder().build().readTree(body).path("id").asString());
         var saved = incidents.findById(id).orElseThrow();
@@ -70,5 +79,18 @@ class IncidentPersistenceIntegrationTest {
         assertEquals(4326, point.getSRID());
         assertEquals(-3.7, point.getX());
         assertEquals(40.4, point.getY());
+
+        String publicList = mockMvc.perform(get("/api/incidents/public"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var entries = JsonMapper.builder().build().readTree(publicList);
+        boolean found = false;
+        for (var entry : entries) {
+            if (id.toString().equals(entry.path("id").asString())) {
+                assertEquals(40.4, entry.path("latitude").asDouble());
+                assertEquals(-3.7, entry.path("longitude").asDouble());
+                found = true;
+            }
+        }
+        assertTrue(found, "La incidencia creada debe aparecer en el listado público");
     }
 }

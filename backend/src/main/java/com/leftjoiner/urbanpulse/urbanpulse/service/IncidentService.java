@@ -11,7 +11,6 @@ import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
 import com.leftjoiner.urbanpulse.urbanpulse.exception.IncidentNotFoundException;
 import com.leftjoiner.urbanpulse.urbanpulse.exception.InvalidPaginationException;
-import com.leftjoiner.urbanpulse.urbanpulse.exception.UserNotFoundException;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.IncidentMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.StatusChangeMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.IncidentRepository;
@@ -27,6 +26,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -41,9 +41,10 @@ public class IncidentService {
     private static final int MAX_PAGE_SIZE = 100;
 
     @Transactional
-    public IncidentResponse create(IncidentRequest request) {
-        UserEntity user = userRepository.findById(request.getUserId())
-                .orElseThrow(UserNotFoundException::new);
+    public IncidentResponse create(IncidentRequest request, UUID authenticatedUserId) {
+        UserEntity user = userRepository.findById(authenticatedUserId)
+                .filter(candidate -> Boolean.TRUE.equals(candidate.getActive()))
+                .orElseThrow(() -> new BadCredentialsException("Credencial no válida."));
         IncidentEntity incident = incidentMapper.toEntity(request);
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         incident.setUser(user);

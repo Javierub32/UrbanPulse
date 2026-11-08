@@ -1,5 +1,7 @@
 package com.leftjoiner.urbanpulse.urbanpulse.entity;
 
+import org.springframework.test.context.ActiveProfiles;
+
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.AssociationType;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
@@ -25,6 +27,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Testcontainers
+@ActiveProfiles("test")
 @SpringBootTest(properties = "spring.docker.compose.enabled=false")
 class EntityPersistenceIntegrationTest {
 
