@@ -48,7 +48,7 @@ Los datos públicos del antiguo login están ahora dentro de `user`. La app ya c
 
 Credenciales de login incorrectas, cuenta inexistente o inactiva: `401` con `{"message":"Credenciales inválidas"}`. Las rutas protegidas usan `application/problem+json`: `401 UNAUTHENTICATED` con `WWW-Authenticate: Bearer`, o `403 ACCESS_DENIED` si el rol del token no permite la operación. La validación devuelve `400 VALIDATION_ERROR` con errores por campo. No se devuelven secretos ni motivos internos del rechazo de una cuenta.
 
-OpenAPI está en `/v3/api-docs` y Swagger UI en `/swagger-ui.html`. El registro está detallado en [registro-ciudadano.md](registro-ciudadano.md).
+OpenAPI está en `/v3/api-docs` y Swagger UI en `/swagger-ui.html`.
 
 ## Qué lleva el token
 
@@ -168,4 +168,3 @@ Backend, desde `backend/`: `bash ./mvnw -B -ntp test`, con Java 17 y Docker para
 
 Frontend, desde `frontend/`: `npm test`, `npm run lint` y `npx tsc --noEmit`. Los tests requieren Node 22.18+ o Node 24+, por la ejecución de TypeScript y los hooks de módulos de Node. Se han ejecutado con Node 25.9.0. Son tests de servicios, almacenamiento web simulado y concurrencia, no tests de renderizado nativo.
 
-El contraste con los proyectos del equipo está en [patrones-autenticacion-equipo.md](patrones-autenticacion-equipo.md).
