@@ -75,7 +75,7 @@ Comprueba también que puedes consultar las incidencias desde la app y que la AP
 
 La base utiliza el volumen `urbanpulse-db` para conservar los datos entre arranques. Detener los contenedores no borra ese volumen.
 
-Las migraciones actuales cargan datos sintéticos de demostración. Antes de utilizar este procedimiento con datos reales habrá que revisar esa carga inicial.
+Las migraciones actuales cargan datos sintéticos de demostración, incluidos diez usuarios activos con una contraseña pública. Antes de utilizar este procedimiento con datos reales habrá que revisar esa carga inicial y eliminar o desactivar esas cuentas.
 
 La API recibe la conexión a PostgreSQL mediante `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` y `SPRING_DATASOURCE_PASSWORD`. Compose configura estas variables para que la API acceda al servicio `db`.
 

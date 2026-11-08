@@ -8,26 +8,26 @@ import {
 import { Stack } from "expo-router/stack";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, useColorScheme } from "react-native";
+import { ActivityIndicator, useColorScheme, View } from "react-native";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { AuthButton, AuthError, AuthScreen } from "@/components/auth-form";
-import { ThemedText } from "@/components/themed-text";
+import { useTheme } from "@/hooks/use-theme";
 
 void SplashScreen.preventAutoHideAsync();
 
 function InitialLayout() {
   const { session, loading, restoreError, restoreSession, signOut } = useAuth();
   const [logoutError, setLogoutError] = useState("");
+  const colors = useTheme();
   useEffect(() => {
-    if (!loading) void SplashScreen.hideAsync();
-  }, [loading]);
+    void SplashScreen.hideAsync();
+  }, []);
 
   if (loading)
     return (
-      <AuthScreen>
-        <ActivityIndicator />
-        <ThemedText>Comprobando tu sesión…</ThemedText>
-      </AuthScreen>
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color={colors.accent} accessibilityLabel="Comprobando sesión" />
+      </View>
     );
   if (restoreError)
     return (
