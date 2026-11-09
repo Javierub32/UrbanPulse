@@ -1,62 +1,36 @@
-import { Camera, GeoJSONSource, Layer, Map as MapLibreMap } from '@maplibre/maplibre-react-native';
+import { useRef } from 'react';
+import { Camera, GeoJSONSource, Layer, Map as MapLibreMap, type CameraRef } from '@maplibre/maplibre-react-native';
 import { StyleSheet } from 'react-native';
-
 import { Colors } from '@/constants/theme';
-import type { IncidentLocation } from '@/types/incidents';
+import { features, type MapProps } from '../map-types';
 
-const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
-const INITIAL_MAP_CENTER: [number, number] = [-4.4214, 36.7213];
-const INCIDENT_LOCATIONS_SOURCE_ID = 'public-incidents';
-
-function toIncidentFeatureCollection(locations: IncidentLocation[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
-  return {
-    type: 'FeatureCollection',
-    features: locations.map(({ id, latitude, longitude }) => ({
-      type: 'Feature',
-      id,
-      properties: { incidentId: id },
-      geometry: { type: 'Point', coordinates: [longitude, latitude] },
-    })),
-  };
-}
-
-export type IncidentMapProps = {
-  locations: IncidentLocation[];
-  onLoaded: () => void;
-  onError: () => void;
-  onSelectIncident: (id: string, point: { x: number; y: number }) => void;
-};
-
-export default function IncidentMap({ locations, onLoaded, onError, onSelectIncident }: IncidentMapProps) {
-  return (
-    <MapLibreMap
-      accessibilityLabel="Mapa interactivo de incidencias en Málaga"
-      mapStyle={MAP_STYLE_URL}
-      onDidFinishLoadingMap={onLoaded}
-      onDidFailLoadingMap={onError}
-      style={StyleSheet.absoluteFill}
-    >
-      <Camera initialViewState={{ center: INITIAL_MAP_CENTER, zoom: 12.5 }} />
-      <GeoJSONSource
-        id={INCIDENT_LOCATIONS_SOURCE_ID}
-        data={toIncidentFeatureCollection(locations)}
-        onPress={(event) => {
-          const id = event.nativeEvent.features[0]?.properties?.incidentId;
-          if (typeof id === 'string') onSelectIncident(id, { x: event.nativeEvent.point[0], y: event.nativeEvent.point[1] });
-        }}
-      >
-        <Layer
-          id="public-incident-points"
-          type="circle"
-          paint={{
-            'circle-radius': 8,
-            'circle-color': Colors.light.accent,
-            'circle-opacity': 0.96,
-            'circle-stroke-color': Colors.light.accentContrast,
-            'circle-stroke-width': 2,
-          }}
-        />
-      </GeoJSONSource>
-    </MapLibreMap>
-  );
+export default function IncidentMap({ items, onLoaded, onError, onSelectIncident, onViewport, onSelectCluster }: MapProps) {
+  const camera = useRef<CameraRef>(null);
+  const zoom = useRef(12.5);
+  return <MapLibreMap accessibilityLabel="Mapa interactivo de incidencias en Málaga"
+    mapStyle="https://tiles.openfreemap.org/styles/liberty" onDidFinishLoadingMap={onLoaded}
+    onDidFailLoadingMap={onError} style={StyleSheet.absoluteFill}
+    onRegionDidChange={event => {
+      const { bounds: [west, south, east, north], zoom: z } = event.nativeEvent;
+      zoom.current = z;
+      onViewport({ west: Math.max(-180, west), south: Math.max(-85, south), east: Math.min(180, east), north: Math.min(85, north), zoom: Math.max(0, Math.min(22, z)) });
+    }}>
+    <Camera ref={camera} initialViewState={{ center: [-4.4214, 36.7213], zoom: 12.5 }} />
+    <GeoJSONSource id="public-incidents" data={features(items)} onPress={event => {
+      const feature = event.nativeEvent.features[0];
+      if (feature?.properties?.type === 'incident' && typeof feature.properties.id === 'string')
+        onSelectIncident(feature.properties.id, { x: event.nativeEvent.point[0], y: event.nativeEvent.point[1] });
+      else if (feature?.properties?.type === 'cluster' && feature.geometry.type === 'Point') {
+        if (zoom.current >= 17) onSelectCluster(feature.properties as import('../map-types').MapItem);
+        else camera.current?.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: Math.min(22, zoom.current + 2), duration: 400 });
+      }
+    }}>
+      <Layer id="point-halo" type="circle" filter={['==', ['get', 'type'], 'incident']} paint={{ 'circle-radius': 16, 'circle-color': Colors.light.accent, 'circle-opacity': 0.22 }} />
+      <Layer id="cluster-halo" type="circle" filter={['==', ['get', 'type'], 'cluster']} paint={{ 'circle-radius': 27, 'circle-color': Colors.light.accent, 'circle-opacity': 0.22 }} />
+      <Layer id="points" type="circle" filter={['==', ['get', 'type'], 'incident']} paint={{ 'circle-radius': 9, 'circle-color': Colors.light.accent, 'circle-stroke-color': Colors.light.accentContrast, 'circle-stroke-width': 2.5 }} />
+      <Layer id="point-center" type="circle" filter={['==', ['get', 'type'], 'incident']} paint={{ 'circle-radius': 2.5, 'circle-color': Colors.light.accentContrast }} />
+      <Layer id="clusters" type="circle" filter={['==', ['get', 'type'], 'cluster']} paint={{ 'circle-radius': 20, 'circle-color': Colors.light.accent, 'circle-stroke-color': Colors.light.accentContrast, 'circle-stroke-width': 2 }} />
+      <Layer id="cluster-count" type="symbol" filter={['==', ['get', 'type'], 'cluster']} layout={{ 'text-field': ['to-string', ['get', 'count']], 'text-size': 14, 'text-allow-overlap': true }} paint={{ 'text-color': Colors.light.accentContrast }} />
+    </GeoJSONSource>
+  </MapLibreMap>;
 }
