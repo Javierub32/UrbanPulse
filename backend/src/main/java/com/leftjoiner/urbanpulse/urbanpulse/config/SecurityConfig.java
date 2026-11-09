@@ -48,6 +48,7 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/incidents/public").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/incidents/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/incidents/create").hasRole("CITIZEN")
                         .anyRequest().denyAll())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService, problemHandler),

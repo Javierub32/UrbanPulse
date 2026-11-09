@@ -21,12 +21,14 @@ function toIncidentFeatureCollection(locations: IncidentLocation[]): GeoJSON.Fea
   };
 }
 
-export default function IncidentMap({ locations, onLoaded, onError }: IncidentMapProps) {
+export default function IncidentMap({ locations, onLoaded, onError, onSelectIncident }: IncidentMapProps) {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const locationsRef = useRef(locations);
   const mapLoadedRef = useRef(false);
-  locationsRef.current = locations;
+  useEffect(() => {
+    locationsRef.current = locations;
+  }, [locations]);
 
   useEffect(() => {
     const container = mapContainer.current;
@@ -57,6 +59,12 @@ export default function IncidentMap({ locations, onLoaded, onError }: IncidentMa
           'circle-stroke-width': 2,
         },
       });
+      map.on('click', 'public-incident-points', (event) => {
+        const id = event.features?.[0]?.properties?.incidentId;
+        if (typeof id === 'string') onSelectIncident(id, { x: event.point.x, y: event.point.y });
+      });
+      map.on('mouseenter', 'public-incident-points', () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', 'public-incident-points', () => { map.getCanvas().style.cursor = ''; });
       mapLoadedRef.current = true;
       onLoaded();
     };
@@ -74,7 +82,7 @@ export default function IncidentMap({ locations, onLoaded, onError }: IncidentMa
       mapRef.current = null;
       map.remove();
     };
-  }, [onError, onLoaded]);
+  }, [onError, onLoaded, onSelectIncident]);
 
   useEffect(() => {
     if (!mapLoadedRef.current) return;

@@ -24,9 +24,10 @@ export type IncidentMapProps = {
   locations: IncidentLocation[];
   onLoaded: () => void;
   onError: () => void;
+  onSelectIncident: (id: string, point: { x: number; y: number }) => void;
 };
 
-export default function IncidentMap({ locations, onLoaded, onError }: IncidentMapProps) {
+export default function IncidentMap({ locations, onLoaded, onError, onSelectIncident }: IncidentMapProps) {
   return (
     <MapLibreMap
       accessibilityLabel="Mapa interactivo de incidencias en Málaga"
@@ -39,6 +40,10 @@ export default function IncidentMap({ locations, onLoaded, onError }: IncidentMa
       <GeoJSONSource
         id={INCIDENT_LOCATIONS_SOURCE_ID}
         data={toIncidentFeatureCollection(locations)}
+        onPress={(event) => {
+          const id = event.nativeEvent.features[0]?.properties?.incidentId;
+          if (typeof id === 'string') onSelectIncident(id, { x: event.nativeEvent.point[0], y: event.nativeEvent.point[1] });
+        }}
       >
         <Layer
           id="public-incident-points"
