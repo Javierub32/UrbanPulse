@@ -119,6 +119,36 @@ class IncidentPersistenceIntegrationTest {
     }
 
     @Test
+    void mapAndMembersApplyTheSameInclusiveDateFilter() throws Exception {
+        UserEntity user = new UserEntity();
+        user.setActive(true);
+        user.setRole(UserRole.CITIZEN);
+        user = users.saveAndFlush(user);
+        jdbc.update("""
+            INSERT INTO "Incident" ("id", "userId", "title", "category", "status", "location", "registeredAt")
+            SELECT gen_random_uuid(), ?, 'Fecha de prueba', 'WASTE', 'REPORTED',
+                   ST_SetSRID(ST_MakePoint(-8, 9), 4326), stamp
+            FROM (VALUES (TIMESTAMP '2026-01-01 00:00:00'), (TIMESTAMP '2026-01-07 00:00:00'),
+                         (TIMESTAMP '2026-01-20 00:00:00'), (NULL::timestamp)) dates(stamp)
+            """, user.getId());
+        var request = get("/api/incidents/map").param("west", "-8.1").param("south", "8.9")
+                .param("east", "-7.9").param("north", "9.1").param("zoom", "15")
+                .param("category", "WASTE").param("status", "REPORTED");
+        mockMvc.perform(request).andExpect(status().isOk()).andExpect(jsonPath("$[0].count").value(4));
+        mockMvc.perform(get("/api/incidents/map").param("west", "-8.1").param("south", "8.9")
+                .param("east", "-7.9").param("north", "9.1").param("zoom", "15")
+                .param("category", "WASTE").param("status", "REPORTED").param("since", "2026-01-07T00:00:00Z"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].count").value(2));
+        mockMvc.perform(get("/api/incidents/map-members").param("west", "-8").param("south", "9")
+                .param("east", "-8").param("north", "9").param("since", "2026-01-07T00:00:00Z")
+                .param("category", "WASTE").param("status", "REPORTED"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2));
+        mockMvc.perform(get("/api/incidents/map").param("west", "-8.1").param("south", "8.9")
+                .param("east", "-7.9").param("north", "9.1").param("zoom", "15").param("since", "no-es-fecha"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void documentsIncidentResponsesAndErrorExtensions() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())

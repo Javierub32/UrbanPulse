@@ -68,7 +68,7 @@ public class IncidentController {
         return incidentService.listAllPublicIncidents();
     }
 
-    @Operation(summary = "Consultar incidencias agrupadas para el mapa", description = "Filtra el área visible y devuelve grupos con su recuento y hasta 50 incidencias individuales. Coordenadas WGS84 y zoom entre 0 y 22.")
+    @Operation(summary = "Consultar incidencias agrupadas para el mapa", description = "Filtra el área visible y devuelve grupos con su recuento y hasta 50 incidencias individuales. Coordenadas WGS84 y zoom entre 0 y 22. since filtra desde una fecha ISO-8601 con zona horaria, inclusive.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Puntos y agrupaciones", content = @Content(array = @ArraySchema(schema = @Schema(implementation = com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentMapItem.class)))),
         @ApiResponse(responseCode = "400", description = "Límites, zoom o filtros no válidos", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class)))
@@ -78,18 +78,20 @@ public class IncidentController {
             @RequestParam double west, @RequestParam double south, @RequestParam double east,
             @RequestParam double north, @RequestParam double zoom,
             @RequestParam(required = false) com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory category,
-            @RequestParam(required = false) com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus status) {
-        return incidentMapService.find(west, south, east, north, zoom, category, status);
+            @RequestParam(required = false) com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus status,
+            @RequestParam(required = false) java.time.Instant since) {
+        return incidentMapService.find(west, south, east, north, zoom, category, status, since);
     }
 
-    @Operation(summary = "Consultar incidencias de una agrupación", description = "Devuelve páginas de hasta 50 incidencias del área del grupo con los filtros activos.")
+    @Operation(summary = "Consultar incidencias de una agrupación", description = "Devuelve páginas de hasta 50 incidencias del área del grupo con los filtros activos; since es una fecha ISO-8601 con zona horaria, inclusive.")
     @GetMapping("/map-members")
     public List<com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentMapItem> mapMembers(
             @RequestParam double west, @RequestParam double south, @RequestParam double east, @RequestParam double north,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(required = false) com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory category,
-            @RequestParam(required = false) com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus status) {
-        return incidentMapService.members(west, south, east, north, category, status, page);
+            @RequestParam(required = false) com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus status,
+            @RequestParam(required = false) java.time.Instant since) {
+        return incidentMapService.members(west, south, east, north, category, status, page, since);
     }
 
     @Operation(summary = "Consultar una incidencia pública", description = "Devuelve el detalle y el historial público de una incidencia, sin datos del autor.")

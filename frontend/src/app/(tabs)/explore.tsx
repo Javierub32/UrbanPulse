@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import IncidentMap from '@/pages/explore/components/incident-map';
 import { FilterSelect } from '@/pages/explore/components/filter-select';
+import { startOfPeriod, timeFilters, type TimeFilter } from '@/pages/explore/time-filters';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { apiRequest } from '@/services/api-client';
@@ -22,6 +23,8 @@ export default function ExploreScreen() {
   const [viewport, setViewport] = useState<MapViewport | null>(null);
   const [category, setCategory] = useState('');
   const [status, setStatus] = useState('');
+  const [period, setPeriod] = useState<TimeFilter>('all');
+  const [since, setSince] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [cluster, setCluster] = useState<MapItem | null>(null);
   const [page, setPage] = useState(0);
@@ -34,12 +37,13 @@ export default function ExploreScreen() {
       const params = new URLSearchParams({ west: String(cluster.west), south: String(cluster.south), east: String(cluster.east), north: String(cluster.north), page: String(page) });
       if (category) params.set('category', category);
       if (status) params.set('status', status);
+      if (since) params.set('since', since);
       apiRequest<MapItem[]>(`/api/incidents/map-members?${params}`, { signal: controller.signal }, false)
         .then(data => { if (!controller.signal.aborted) setMembers({ status: 'success', data }); })
         .catch(() => { if (!controller.signal.aborted) setMembers({ status: 'error', data: [] }); });
     }, 0);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [cluster, page, category, status, refresh]);
+  }, [cluster, page, category, status, since, refresh]);
   const [incidents, setIncidents] = useState<{ status: 'loading' | 'success' | 'error'; data: MapItem[]; message?: string }>({ status: 'loading', data: [] });
   const retry = () => setRefresh(value => value + 1);
   useEffect(() => {
@@ -50,12 +54,13 @@ export default function ExploreScreen() {
       const params = new URLSearchParams(Object.entries(viewport).map(([key, value]) => [key, String(value)]));
       if (category) params.set('category', category);
       if (status) params.set('status', status);
+      if (since) params.set('since', since);
       apiRequest<MapItem[]>(`/api/incidents/map?${params}`, { signal: controller.signal }, false)
         .then(data => { if (!controller.signal.aborted) setIncidents({ status: 'success', data }); })
         .catch(error => { if (!controller.signal.aborted) setIncidents({ status: 'error', data: [], message: error.message }); });
     }, 250);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [viewport, category, status, refresh]);
+  }, [viewport, category, status, since, refresh]);
   const [mapStatus, setMapStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [attempt, setAttempt] = useState(0);
   const [selection, setSelection] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -95,7 +100,10 @@ export default function ExploreScreen() {
       <ThemedText type="small" themeColor="textSecondary">Selecciona un punto para ver su información.</ThemedText>
     </View>
     <View style={{ marginTop: Spacing.three, gap: Spacing.two }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><ThemedText type="smallBold">Filtros</ThemedText>{(category || status) ? <Pressable accessibilityRole="button" onPress={() => { setCategory(''); setStatus(''); setSelection(null); }}><ThemedText type="linkPrimary">Limpiar</ThemedText></Pressable> : null}</View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><ThemedText type="smallBold">Filtros</ThemedText>{(category || status || period !== 'all') ? <Pressable accessibilityRole="button" onPress={() => { setCategory(''); setStatus(''); setPeriod('all'); setSince(null); setSelection(null); setCluster(null); }}><ThemedText type="linkPrimary">Limpiar</ThemedText></Pressable> : null}</View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.two }} accessibilityLabel="Filtrar por fecha">
+        {timeFilters.map(item => <Pressable key={item.value} accessibilityRole="radio" accessibilityState={{ checked: period === item.value }} onPress={() => { setPeriod(item.value); setSince(startOfPeriod(item.value)); setSelection(null); setCluster(null); }} style={{ minHeight: 40, paddingHorizontal: 14, borderRadius: 20, justifyContent: 'center', backgroundColor: period === item.value ? theme.accentSurface : theme.backgroundElement }}><ThemedText type="smallBold" style={period === item.value ? { color: theme.accentContrast } : undefined}>{item.label}</ThemedText></Pressable>)}
+      </ScrollView>
       <View style={{ flexDirection: 'row', gap: Spacing.two }}>
         <FilterSelect label="Categoría" value={category} options={categories} onChange={value => { setCategory(value); setSelection(null); }} />
         <FilterSelect label="Estado" value={status} options={Object.entries(statuses).map(([value, label]) => ({ value, label }))} onChange={value => { setStatus(value); setSelection(null); }} />

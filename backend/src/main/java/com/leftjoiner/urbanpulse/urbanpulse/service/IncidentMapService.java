@@ -17,7 +17,7 @@ public class IncidentMapService {
 
     @Transactional(readOnly = true)
     public List<IncidentMapItem> find(double west, double south, double east, double north, double zoom,
-            IncidentCategory category, IncidentStatus status) {
+            IncidentCategory category, IncidentStatus status, java.time.Instant since) {
         if (!Double.isFinite(west) || !Double.isFinite(east) || !Double.isFinite(south) || !Double.isFinite(north)
                 || !Double.isFinite(zoom) || west < -180 || east > 180 || west >= east
                 || south < -85 || north > 85 || south >= north || zoom < 0 || zoom > 22) {
@@ -26,7 +26,8 @@ public class IncidentMapService {
         var params = new MapSqlParameterSource().addValue("west", west).addValue("south", south)
                 .addValue("east", east).addValue("north", north)
                 .addValue("category", category == null ? null : category.name())
-                .addValue("status", status == null ? null : status.name());
+                .addValue("status", status == null ? null : status.name())
+                .addValue("since", since == null ? null : java.time.LocalDateTime.ofInstant(since, java.time.ZoneOffset.UTC));
         // Una cuadrícula global estable evita que los grupos cambien al desplazar el mapa.
         // El filtro espacial utiliza el índice GiST sobre la geometría original.
         String sql = """
@@ -38,6 +39,7 @@ public class IncidentMapService {
                 AND ST_Intersects("location", ST_MakeEnvelope(:west, :south, :east, :north, 4326))
                 AND (CAST(:category AS text) IS NULL OR "category"::text = :category)
                 AND (CAST(:status AS text) IS NULL OR "status"::text = :status)
+                AND (CAST(:since AS timestamp) IS NULL OR "registeredAt" >= CAST(:since AS timestamp))
             ), grouped AS (
               SELECT floor((x + 180) / :cell) AS gx, floor((y + 90) / :cell) AS gy,
                 count(*) AS amount, avg(x) AS x, avg(y) AS y, min(x) AS west, max(x) AS east, min(y) AS south, max(y) AS north,
@@ -85,14 +87,15 @@ public class IncidentMapService {
     }
     @Transactional(readOnly = true)
     public List<IncidentMapItem> members(double west, double south, double east, double north,
-            IncidentCategory category, IncidentStatus status, int page) {
+            IncidentCategory category, IncidentStatus status, int page, java.time.Instant since) {
         if (!Double.isFinite(west) || !Double.isFinite(east) || !Double.isFinite(south) || !Double.isFinite(north)
                 || west < -180 || east > 180 || west > east || south < -85 || north > 85 || south > north
                 || page < 0 || page > 100000) throw new IllegalArgumentException("Área o página no válida");
         var params = new MapSqlParameterSource().addValue("west", west).addValue("south", south)
                 .addValue("east", east).addValue("north", north).addValue("offset", (long) page * 50)
                 .addValue("category", category == null ? null : category.name())
-                .addValue("status", status == null ? null : status.name());
+                .addValue("status", status == null ? null : status.name())
+                .addValue("since", since == null ? null : java.time.LocalDateTime.ofInstant(since, java.time.ZoneOffset.UTC));
         return jdbc.query("""
             SELECT "id"::text AS id, "title", "category"::text AS category, "status"::text AS status,
                    ST_X("location") AS x, ST_Y("location") AS y
@@ -101,6 +104,7 @@ public class IncidentMapService {
               AND ST_X("location") BETWEEN :west AND :east AND ST_Y("location") BETWEEN :south AND :north
               AND (CAST(:category AS text) IS NULL OR "category"::text = :category)
               AND (CAST(:status AS text) IS NULL OR "status"::text = :status)
+                AND (CAST(:since AS timestamp) IS NULL OR "registeredAt" >= CAST(:since AS timestamp))
             ORDER BY "id" LIMIT 50 OFFSET :offset
             """, params, (rs, row) -> new IncidentMapItem("incident", rs.getString("id"), rs.getString("title"),
                     rs.getString("category"), rs.getString("status"), rs.getDouble("y"), rs.getDouble("x"), 1,
