@@ -28,6 +28,11 @@ public class IncidentExceptionHandler extends RequestExceptionHandler {
                 "La página o el tamaño solicitados no son válidos.", "INVALID_PAGINATION");
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ProblemDetail handleInvalidMap(IllegalArgumentException exception) {
+        return problem(HttpStatus.BAD_REQUEST, "Petición no válida", "Los límites o el zoom no son válidos.", "INVALID_REQUEST");
+    }
+
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleUnexpectedException(Exception exception) {
         log.error("Error inesperado al procesar una incidencia", exception);

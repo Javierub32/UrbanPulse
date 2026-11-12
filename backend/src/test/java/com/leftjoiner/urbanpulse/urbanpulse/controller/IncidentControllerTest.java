@@ -59,6 +59,7 @@ class IncidentControllerTest {
 
     @Autowired private MockMvc mockMvc;
     @MockitoBean private IncidentService service;
+    @MockitoBean private com.leftjoiner.urbanpulse.urbanpulse.service.IncidentMapService incidentMapService;
 
     @Test
     void detailIsPublicAndDoesNotExposeTheAuthor() throws Exception {
