@@ -20,5 +20,5 @@ export function createIncident(incident: Incident) {
 }
 
 export async function getIncidents(signal?: AbortSignal): Promise<IncidentListItem[]> {
-  return apiRequest<IncidentListItem[]>('/api/incidents/public', { signal }, false);
+  return apiRequest<IncidentListItem[]>('/api/incidents/public', { signal });
 }

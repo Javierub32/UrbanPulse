@@ -41,12 +41,15 @@ Los datos públicos del antiguo login están ahora dentro de `user`. La app ya c
 | `POST /api/auth/login` | Público; comprueba la cuenta y BCrypt. |
 | `GET /api/auth/me` | JWT válido; recupera la cuenta y comprueba existencia, actividad y que tenga rol. |
 | `POST /api/incidents/create` | JWT con rol `CITIZEN`; el servicio recupera al autor y exige que siga activo. |
-| `GET /api/incidents/public` | Público; devuelve los datos necesarios para el listado y el mapa. |
+| `GET /api/incidents/public` | JWT: devuelve solo incidencias accesibles al usuario; el nombre de la ruta se conserva por compatibilidad. |
+| `GET /api/incidents/map`, `/map-members`, `/{id}` | JWT: operadores ven todas; ciudadanos, las propias; técnicos, las que tienen o han tenido asignadas. Administradores y analistas reciben 403. |
 | `GET /actuator/health` | Público. |
 | OpenAPI y Swagger UI | Consulta pública. |
-| Otras rutas | Denegadas en esta entrega; no se anticipan los permisos de #10. |
+| Otras rutas | Denegadas hasta que se definan explícitamente sus permisos. |
 
 Credenciales de login incorrectas, cuenta inexistente o inactiva: `401` con `{"message":"Credenciales inválidas"}`. Las rutas protegidas usan `application/problem+json`: `401 UNAUTHENTICATED` con `WWW-Authenticate: Bearer`, o `403 ACCESS_DENIED` si el rol del token no permite la operación. La validación devuelve `400 VALIDATION_ERROR` con errores por campo. No se devuelven secretos ni motivos internos del rechazo de una cuenta.
+
+Para el detalle, una incidencia inexistente o ajena al ciudadano o técnico devuelve `404 INCIDENT_NOT_FOUND`, sin revelar si existe. Las consultas del mapa filtran las incidencias antes de agruparlas y contar resultados.
 
 OpenAPI está en `/v3/api-docs` y Swagger UI en `/swagger-ui.html`.
 
@@ -62,20 +65,15 @@ Firma HS256 con clave externa. Claims:
 | `iat`, `exp` | Emisión y caducidad. |
 | `jti` | Identificador aleatorio; no implica una lista de revocación. |
 
-No se incluyen nombre, email ni contraseña. El filtro verifica firma, algoritmo, emisor, audiencia, fechas, UUID y rol del enum. Construye la identidad y la autoridad `ROLE_<role>` del token. **El filtro no consulta PostgreSQL.** Cookies, parámetros de URL y tokens sin firma no sirven como autenticación. Se usa JJWT 0.13.0; su adaptador JSON conserva Jackson 2 con la versión fijada en el POM. Las respuestas HTTP usan Jackson 3 de Spring Boot.
+No se incluyen nombre, email ni contraseña. El filtro verifica firma, algoritmo, emisor, audiencia, fechas, UUID y rol del enum. Consulta PostgreSQL para comprobar que la cuenta existe, sigue activa y conserva el rol del token; después construye la identidad y la autoridad `ROLE_<role>`. Cookies, parámetros de URL y tokens sin firma no sirven como autenticación.
 
 ### Cambios de rol y cuentas desactivadas
 
-El rol representa el que tenía el usuario al iniciar sesión. Cambiarlo en PostgreSQL no cambia los tokens ya emitidos: el usuario debe salir y volver a entrar para obtener otro. Los tokens antiguos mantienen su rol hasta caducar, incluso tras una reducción de privilegios. Con la duración predeterminada, esto puede prolongarse hasta 3 días.
+El rol representa el que tenía el usuario al iniciar sesión. Si se cambia el rol en PostgreSQL, los tokens con el rol anterior se rechazan con `401` en las peticiones posteriores; el usuario debe iniciar sesión de nuevo. Las cuentas desactivadas o eliminadas también reciben `401`.
 
 `/me` recupera el nombre y email actuales, comprueba la cuenta y devuelve el **rol del JWT**, que es el usado para autorizar. Así la app no muestra un rol distinto al que realmente se aplica.
 
-El filtro, por sí solo, no detecta una cuenta eliminada o desactivada después del login. Las dos operaciones protegidas actuales comprueban su estado usando la consulta que ya necesitan:
-
-- `/me` rechaza cuentas inexistentes, inactivas o sin rol con `401`.
-- Crear una incidencia recupera al autor para asociarlo y exige `active=true`; si falta o está inactivo devuelve `401` y no guarda la incidencia. No añade otra consulta de autenticación.
-
-Estas comprobaciones ven el estado al recuperar la cuenta; no cancelan una operación ya en curso. Cada operación nueva tendrá que decidir dónde comprobar el estado. Sin consultar una fuente de revocación no se puede prometer la invalidación inmediata de todos los JWT. No se ha añadido esa infraestructura ni una consulta al filtro.
+La comprobación consulta la cuenta en cada petición con token y no cancela una operación que ya esté en curso. Si el rol cambia y vuelve al valor anterior antes de que caduque el token, ese token puede volver a ser válido: no existe revocación individual por `jti`.
 
 ## Autor de las incidencias
 
@@ -158,7 +156,7 @@ Se guardan únicamente el token y su vencimiento local, nunca contraseñas:
 
 Las escrituras se ejecutan en orden y omiten operaciones de una sesión anterior. Si falla guardar el token, no se completa el login. Si falla borrarlo, se retira la sesión en memoria y se muestra un error para reintentar: no se declara terminado el borrado persistente. En una restauración sin red se conserva el token y se bloquea el acceso hasta verificarlo o elegir salir.
 
-El vencimiento local sirve para la interfaz; el servidor valida la firma y la caducidad real. Borrar el token local no revoca una copia en otro cliente. No hay refresh tokens ni invalidación individual mediante `jti`; una copia del token puede utilizarse hasta que caduque.
+El vencimiento local sirve para la interfaz; el servidor valida la firma y la caducidad real. Borrar el token local no revoca una copia en otro cliente. No hay refresh tokens ni invalidación individual mediante `jti`; una copia del token puede utilizarse hasta que caduque si la cuenta sigue activa y conserva el mismo rol.
 
 La barra inferior y las pantallas iniciales ya existían en `main`. Se conservan; no proceden de copiar la interfaz de TopFive. Las pantallas nuevas de autenticación están en `src/pages/` y sus rutas en `src/app/`.
 

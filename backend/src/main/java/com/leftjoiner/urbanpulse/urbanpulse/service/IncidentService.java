@@ -28,6 +28,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.transaction.annotation.Transactional;
+import com.leftjoiner.urbanpulse.urbanpulse.security.UrbanPulsePrincipal;
+import org.springframework.security.access.AccessDeniedException;
 
 @Service
 @RequiredArgsConstructor
@@ -79,8 +81,13 @@ public class IncidentService {
     }
 
     @Transactional(readOnly = true)
-    public IncidentDetailResponse getIncidentDetail(UUID incidentId) {
-        IncidentEntity incident = incidentRepository.findById(incidentId)
+    public IncidentDetailResponse getIncidentDetail(UUID incidentId, UrbanPulsePrincipal principal) {
+        IncidentEntity incident = (switch (principal.getRole()) {
+            case OPERATOR -> incidentRepository.findById(incidentId);
+            case CITIZEN -> incidentRepository.findByIdAndUserId(incidentId, principal.getId());
+            case TECHNICIAN -> incidentRepository.findAssignedById(incidentId, principal.getId());
+            default -> throw new AccessDeniedException("Acceso denegado");
+        })
                 .orElseThrow(IncidentNotFoundException::new);
         IncidentResponse response = incidentMapper.toDTO(incident);
         List<IncidentHistoryResponse> history = statusChangeRepository
@@ -92,8 +99,14 @@ public class IncidentService {
     }
 
     @Transactional(readOnly = true)
-    public List<IncidentListItemResponse> listAllPublicIncidents() {
-        return incidentRepository.findAllByOrderByRegisteredAtDescIdDesc().stream()
+    public List<IncidentListItemResponse> listAccessibleIncidents(UrbanPulsePrincipal principal) {
+        List<IncidentEntity> accessible = switch (principal.getRole()) {
+            case OPERATOR -> incidentRepository.findAllByOrderByRegisteredAtDescIdDesc();
+            case CITIZEN -> incidentRepository.findAllByUserIdOrderByRegisteredAtDescIdDesc(principal.getId());
+            case TECHNICIAN -> incidentRepository.findAssignedTo(principal.getId());
+            default -> throw new AccessDeniedException("Acceso denegado");
+        };
+        return accessible.stream()
                 .map(incidentMapper::toListItemDTO)
                 .toList();
     }

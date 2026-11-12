@@ -53,25 +53,30 @@ public class IncidentController {
     }
 
     @Operation(
-            summary = "Listar incidencias públicas",
-            description = "Devuelve las incidencias registradas con los datos mínimos para mostrarlas en la app. No requiere autenticación.")
+            summary = "Listar incidencias accesibles",
+            description = "Devuelve las incidencias accesibles según el rol y las asignaciones del usuario autenticado.",
+            security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Listado de incidencias",
                 content = @Content(mediaType = "application/json",
                         schema = @Schema(implementation = IncidentListItemResponse.class))),
+        @ApiResponse(responseCode = "401", description = "Autenticación necesaria", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
+        @ApiResponse(responseCode = "403", description = "Rol sin permiso para consultar incidencias", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
         @ApiResponse(responseCode = "500", description = "Error inesperado",
                 content = @Content(mediaType = "application/problem+json",
                         schema = @Schema(implementation = ProblemResponseSchema.class)))
     })
     @GetMapping("/public")
-    public List<IncidentListItemResponse> listPublicIncidents() {
-        return incidentService.listAllPublicIncidents();
+    public List<IncidentListItemResponse> listPublicIncidents(@AuthenticationPrincipal UrbanPulsePrincipal principal) {
+        return incidentService.listAccessibleIncidents(principal);
     }
 
-    @Operation(summary = "Consultar incidencias agrupadas para el mapa", description = "Filtra el área visible y devuelve grupos con su recuento y hasta 50 incidencias individuales. Coordenadas WGS84 y zoom entre 0 y 22. since filtra desde una fecha ISO-8601 con zona horaria, inclusive.")
+    @Operation(summary = "Consultar incidencias accesibles agrupadas para el mapa", description = "Agrupa únicamente las incidencias accesibles para el usuario autenticado.", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Puntos y agrupaciones", content = @Content(array = @ArraySchema(schema = @Schema(implementation = com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentMapItem.class)))),
-        @ApiResponse(responseCode = "400", description = "Límites, zoom o filtros no válidos", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class)))
+        @ApiResponse(responseCode = "400", description = "Límites, zoom o filtros no válidos", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
+        @ApiResponse(responseCode = "401", description = "Autenticación necesaria", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
+        @ApiResponse(responseCode = "403", description = "Rol sin permiso para consultar incidencias", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class)))
     })
     @GetMapping("/map")
     public List<com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentMapItem> map(
@@ -79,30 +84,40 @@ public class IncidentController {
             @RequestParam double north, @RequestParam double zoom,
             @RequestParam(required = false) com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory category,
             @RequestParam(required = false) com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus status,
-            @RequestParam(required = false) java.time.Instant since) {
-        return incidentMapService.find(west, south, east, north, zoom, category, status, since);
+            @RequestParam(required = false) java.time.Instant since,
+            @AuthenticationPrincipal UrbanPulsePrincipal principal) {
+        return incidentMapService.find(west, south, east, north, zoom, category, status, since, principal);
     }
 
-    @Operation(summary = "Consultar incidencias de una agrupación", description = "Devuelve páginas de hasta 50 incidencias del área del grupo con los filtros activos; since es una fecha ISO-8601 con zona horaria, inclusive.")
+    @Operation(summary = "Consultar incidencias accesibles de una agrupación", description = "Devuelve páginas de hasta 50 incidencias accesibles del área del grupo.", security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Incidencias accesibles", content = @Content(array = @ArraySchema(schema = @Schema(implementation = com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentMapItem.class)))),
+        @ApiResponse(responseCode = "400", description = "Área o página no válida", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
+        @ApiResponse(responseCode = "401", description = "Autenticación necesaria", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
+        @ApiResponse(responseCode = "403", description = "Rol sin permiso para consultar incidencias", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class)))
+    })
     @GetMapping("/map-members")
     public List<com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentMapItem> mapMembers(
             @RequestParam double west, @RequestParam double south, @RequestParam double east, @RequestParam double north,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(required = false) com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory category,
             @RequestParam(required = false) com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus status,
-            @RequestParam(required = false) java.time.Instant since) {
-        return incidentMapService.members(west, south, east, north, category, status, page, since);
+            @RequestParam(required = false) java.time.Instant since,
+            @AuthenticationPrincipal UrbanPulsePrincipal principal) {
+        return incidentMapService.members(west, south, east, north, category, status, page, since, principal);
     }
 
-    @Operation(summary = "Consultar una incidencia pública", description = "Devuelve el detalle y el historial público de una incidencia, sin datos del autor.")
+    @Operation(summary = "Consultar una incidencia accesible", description = "Devuelve el detalle y el historial si el usuario tiene acceso a la incidencia.", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Detalle de la incidencia", content = @Content(schema = @Schema(implementation = IncidentDetailResponse.class))),
         @ApiResponse(responseCode = "400", description = "Identificador no válido", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
-        @ApiResponse(responseCode = "404", description = "Incidencia inexistente", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class)))
+        @ApiResponse(responseCode = "401", description = "Autenticación necesaria", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
+        @ApiResponse(responseCode = "403", description = "Rol sin permiso para consultar incidencias", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
+        @ApiResponse(responseCode = "404", description = "Incidencia inexistente o no accesible", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class)))
     })
     @GetMapping("/{id}")
-    public IncidentDetailResponse getDetail(@PathVariable UUID id) {
-        return incidentService.getIncidentDetail(id);
+    public IncidentDetailResponse getDetail(@PathVariable UUID id, @AuthenticationPrincipal UrbanPulsePrincipal principal) {
+        return incidentService.getIncidentDetail(id, principal);
     }
 
 }

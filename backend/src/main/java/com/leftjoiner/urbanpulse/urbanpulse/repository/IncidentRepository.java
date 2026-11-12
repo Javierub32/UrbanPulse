@@ -14,4 +14,20 @@ public interface IncidentRepository extends JpaRepository<IncidentEntity, UUID> 
     Page<IncidentEntity> findAllByUserId(UUID userId, Pageable pageable);
 
     Optional<IncidentEntity> findByIdAndUserId(UUID incidentId, UUID userId);
+
+    List<IncidentEntity> findAllByUserIdOrderByRegisteredAtDescIdDesc(UUID userId);
+
+    @org.springframework.data.jpa.repository.Query("""
+        select i from IncidentEntity i where exists
+        (select a.id from AssignmentEntity a where a.incident = i and a.technician.id = :userId)
+        order by i.registeredAt desc, i.id desc
+        """)
+    List<IncidentEntity> findAssignedTo(@org.springframework.data.repository.query.Param("userId") UUID userId);
+
+    @org.springframework.data.jpa.repository.Query("""
+        select i from IncidentEntity i where i.id = :incidentId and exists
+        (select a.id from AssignmentEntity a where a.incident = i and a.technician.id = :userId)
+        """)
+    Optional<IncidentEntity> findAssignedById(@org.springframework.data.repository.query.Param("incidentId") UUID incidentId,
+                                              @org.springframework.data.repository.query.Param("userId") UUID userId);
 }
