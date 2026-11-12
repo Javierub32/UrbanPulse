@@ -79,8 +79,8 @@ public class IncidentService {
     }
 
     @Transactional(readOnly = true)
-    public IncidentDetailResponse getIncidentDetail(UUID userId, UUID incidentId) {
-        IncidentEntity incident = incidentRepository.findByIdAndUserId(incidentId, userId)
+    public IncidentDetailResponse getIncidentDetail(UUID incidentId) {
+        IncidentEntity incident = incidentRepository.findById(incidentId)
                 .orElseThrow(IncidentNotFoundException::new);
         IncidentResponse response = incidentMapper.toDTO(incident);
         List<IncidentHistoryResponse> history = statusChangeRepository

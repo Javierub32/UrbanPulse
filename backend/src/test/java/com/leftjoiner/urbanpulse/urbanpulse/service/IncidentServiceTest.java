@@ -20,6 +20,18 @@ import static org.mockito.Mockito.*;
 
 class IncidentServiceTest {
     @Test
+    void detailDoesNotLoadHistoryWhenNotFound() {
+        var incidents = mock(IncidentRepository.class);
+        var history = mock(StatusChangeRepository.class);
+        var service = new IncidentService(incidents, mock(UserRepository.class), new IncidentMapper(), history, mock(StatusChangeMapper.class));
+        UUID incidentId = UUID.randomUUID();
+        when(incidents.findById(incidentId)).thenReturn(Optional.empty());
+        assertThrows(com.leftjoiner.urbanpulse.urbanpulse.exception.IncidentNotFoundException.class,
+                () -> service.getIncidentDetail(incidentId));
+        verify(incidents).findById(incidentId);
+        verifyNoInteractions(history);
+    }
+    @Test
     void createsReportedIncidentWithNoPriorityAndWgs84Location() {
         var incidents = mock(IncidentRepository.class);
         var users = mock(UserRepository.class);

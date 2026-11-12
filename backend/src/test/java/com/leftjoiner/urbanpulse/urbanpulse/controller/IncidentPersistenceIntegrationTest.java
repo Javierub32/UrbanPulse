@@ -80,6 +80,19 @@ class IncidentPersistenceIntegrationTest {
         assertEquals(-3.7, point.getX());
         assertEquals(40.4, point.getY());
 
+        mockMvc.perform(get("/api/incidents/{id}", id).header("Authorization", "Bearer " + jwtService.issue(user.getId(), user.getRole())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.description").value("Apagada"))
+                .andExpect(jsonPath("$.history").isArray());
+        UserEntity other = new UserEntity();
+        other.setActive(true);
+        other.setRole(UserRole.CITIZEN);
+        other = users.saveAndFlush(other);
+        mockMvc.perform(get("/api/incidents/{id}", id).header("Authorization", "Bearer " + jwtService.issue(other.getId(), other.getRole())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.description").value("Apagada"))
+                .andExpect(jsonPath("$.userId").doesNotExist());
+        mockMvc.perform(get("/api/incidents/{id}", id))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id.toString()));
+
         String publicList = mockMvc.perform(get("/api/incidents/public"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         var entries = JsonMapper.builder().build().readTree(publicList);

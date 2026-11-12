@@ -9,10 +9,23 @@ registerHooks({ resolve(specifier, context, nextResolve) {
 } });
 const authService = await import('../src/services/auth-service.ts');
 const webStorage = await import('../src/services/token-storage.ts');
+const { getIncidentDetail } = await import('../src/pages/incident-detail/services/incident-detail-service.ts');
 
 const originalFetch = globalThis.fetch;
 const originalWindow = globalThis.window;
 afterEach(() => { globalThis.fetch = originalFetch; globalThis.window = originalWindow; setApiSession(null); });
+
+test('consulta el detalle público sin enviar la sesión y transmite errores', async () => {
+  setApiSession('token');
+  globalThis.fetch = async (url, options) => {
+    assert.ok(url.endsWith('/api/incidents/incident-id'));
+    assert.equal(options.headers.get('Authorization'), null);
+    return Response.json({ id: 'incident-id', history: [] });
+  };
+  assert.deepEqual(await getIncidentDetail('incident-id'), { id: 'incident-id', history: [] });
+  globalThis.fetch = async () => Response.json({ detail: 'No encontrada' }, { status: 404 });
+  await assert.rejects(getIncidentDetail('incident-id'), error => error instanceof ApiError && error.status === 404);
+});
 
 test('restaura solo credenciales válidas que todavía no hayan caducado', () => {
   assert.equal(readStoredSession(null), null);

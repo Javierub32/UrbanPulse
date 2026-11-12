@@ -52,6 +52,7 @@ function InitialLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={!!session}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="incident/[id]" options={{ headerShown: true, title: "Detalle de incidencia" }} />
       </Stack.Protected>
       <Stack.Protected guard={!session}>
         <Stack.Screen name="(auth)" />

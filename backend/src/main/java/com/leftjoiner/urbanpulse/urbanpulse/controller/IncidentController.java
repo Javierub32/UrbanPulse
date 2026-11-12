@@ -1,6 +1,7 @@
 package com.leftjoiner.urbanpulse.urbanpulse.controller;
 
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentRequest;
+import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentDetailResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentListItemResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.ProblemResponseSchema;
@@ -15,6 +16,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -63,6 +65,17 @@ public class IncidentController {
     @GetMapping("/public")
     public List<IncidentListItemResponse> listPublicIncidents() {
         return incidentService.listAllPublicIncidents();
+    }
+
+    @Operation(summary = "Consultar una incidencia pública", description = "Devuelve el detalle y el historial público de una incidencia, sin datos del autor.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Detalle de la incidencia", content = @Content(schema = @Schema(implementation = IncidentDetailResponse.class))),
+        @ApiResponse(responseCode = "400", description = "Identificador no válido", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
+        @ApiResponse(responseCode = "404", description = "Incidencia inexistente", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class)))
+    })
+    @GetMapping("/{id}")
+    public IncidentDetailResponse getDetail(@PathVariable UUID id) {
+        return incidentService.getIncidentDetail(id);
     }
 
 }

@@ -16,6 +16,8 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.context.ActiveProfiles;
 
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentResponse;
+import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentDetailResponse;
+import com.leftjoiner.urbanpulse.urbanpulse.exception.IncidentNotFoundException;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentListItemResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
@@ -59,6 +61,31 @@ class IncidentControllerTest {
     @MockitoBean private IncidentService service;
 
     @Test
+    void detailIsPublicAndDoesNotExposeTheAuthor() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        var response = new IncidentResponse(id, userId, "Farola", "Apagada", IncidentCategory.STREET_LIGHTING,
+                40.4, -3.7, null, IncidentStatus.REPORTED, null, null);
+        when(service.getIncidentDetail(id)).thenReturn(new IncidentDetailResponse(response, List.of()));
+        mockMvc.perform(get("/api/incidents/{id}", id))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id.toString()))
+                .andExpect(jsonPath("$.description").value("Apagada"))
+                .andExpect(jsonPath("$.userId").doesNotExist())
+                .andExpect(jsonPath("$.history").isArray());
+        verify(service).getIncidentDetail(id);
+    }
+
+    @Test
+    void missingIncidentReturns404AndInvalidIdReturns400() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.getIncidentDetail(id)).thenThrow(new IncidentNotFoundException());
+        mockMvc.perform(get("/api/incidents/{id}", id).with(SecurityMockMvcRequestPostProcessors.authentication(citizen())))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("INCIDENT_NOT_FOUND"));
+        mockMvc.perform(get("/api/incidents/not-a-uuid").with(SecurityMockMvcRequestPostProcessors.authentication(citizen())))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
     void publicListIsAvailableWithoutAuthenticationAndReturnsMapCoordinates() throws Exception {
         UUID id = UUID.randomUUID();
         when(service.listAllPublicIncidents()).thenReturn(List.of(
@@ -86,6 +113,7 @@ class IncidentControllerTest {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/incidents/create'].post.responses['201']").exists())
+                .andExpect(jsonPath("$.paths['/api/incidents/{id}'].get.responses['404']").exists())
                 .andExpect(jsonPath("$.paths['/api/incidents/create'].post.responses['400'].content['application/problem+json']").exists())
                 .andExpect(jsonPath("$.components.schemas.ProblemResponse.properties.code").exists())
                 .andExpect(jsonPath("$.components.schemas.ProblemResponse.properties.errors").exists());
