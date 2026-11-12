@@ -47,7 +47,6 @@ function NavigationTab({
 }: NavigationTabProps) {
   const isDark = useColorScheme() === "dark";
   const colors = Colors[isDark ? "dark" : "light"];
-  const accent = isDark ? "#66D9C9" : "#117D73";
 
   return (
     <Pressable
@@ -63,10 +62,14 @@ function NavigationTab({
         <View
           style={[
             styles.reportButton,
-            { backgroundColor: isDark ? "#168F84" : "#117D73" },
+            { backgroundColor: colors.accentSurface },
           ]}
         >
-          <SymbolView name={tabSymbols[icon]} tintColor="#FFFFFF" size={24} />
+          <SymbolView
+            name={tabSymbols[icon]}
+            tintColor={colors.accentContrast}
+            size={24}
+          />
         </View>
       ) : (
         <View
@@ -77,7 +80,7 @@ function NavigationTab({
         >
           <SymbolView
             name={tabSymbols[icon]}
-            tintColor={isFocused ? accent : colors.textSecondary}
+            tintColor={isFocused ? colors.accent : colors.textSecondary}
             size={22}
           />
         </View>
@@ -86,7 +89,7 @@ function NavigationTab({
         type="small"
         style={[
           styles.label,
-          { color: isFocused ? accent : colors.textSecondary },
+          { color: isFocused ? colors.accent : colors.textSecondary },
           prominent && styles.reportLabel,
         ]}
       >

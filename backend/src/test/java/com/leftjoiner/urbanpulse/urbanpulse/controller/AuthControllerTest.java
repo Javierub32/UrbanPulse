@@ -1,5 +1,14 @@
 package com.leftjoiner.urbanpulse.urbanpulse.controller;
 
+import com.leftjoiner.urbanpulse.urbanpulse.config.JwtConfig;
+import com.leftjoiner.urbanpulse.urbanpulse.config.SecurityConfig;
+import com.leftjoiner.urbanpulse.urbanpulse.dto.AuthResponse;
+import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
+import com.leftjoiner.urbanpulse.urbanpulse.security.JwtService;
+import com.leftjoiner.urbanpulse.urbanpulse.security.SecurityProblemHandler;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
+
 import com.leftjoiner.urbanpulse.urbanpulse.dto.LoginResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
 import com.leftjoiner.urbanpulse.urbanpulse.service.AuthService;
@@ -23,8 +32,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@ActiveProfiles("test")
+@Import({SecurityConfig.class,
+        JwtConfig.class,
+        JwtService.class,
+        SecurityProblemHandler.class})
 @WebMvcTest(AuthController.class)
 class AuthControllerTest {
+    @MockitoBean private UserRepository userRepository;
 
     @Autowired
     private MockMvc mockMvc;
@@ -35,8 +50,9 @@ class AuthControllerTest {
     @Test
     void returnsOnlyPublicUserDataForValidCredentials() throws Exception {
         UUID id = UUID.randomUUID();
-        when(authService.authenticate("citizen@example.com", "test-password"))
-                .thenReturn(Optional.of(new LoginResponse(id, "Test citizen", "citizen@example.com", UserRole.CITIZEN)));
+        when(authService.login("citizen@example.com", "test-password"))
+                .thenReturn(Optional.of(new AuthResponse("test-token", "Bearer", 900,
+                        new LoginResponse(id, "Test citizen", "citizen@example.com", UserRole.CITIZEN))));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -45,17 +61,20 @@ class AuthControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", aMapWithSize(4)))
-                .andExpect(jsonPath("$.id").value(id.toString()))
-                .andExpect(jsonPath("$.name").value("Test citizen"))
-                .andExpect(jsonPath("$.email").value("citizen@example.com"))
-                .andExpect(jsonPath("$.role").value("CITIZEN"))
+                .andExpect(jsonPath("$.accessToken").value("test-token"))
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresIn").value(900))
+                .andExpect(jsonPath("$.user.id").value(id.toString()))
+                .andExpect(jsonPath("$.user.name").value("Test citizen"))
+                .andExpect(jsonPath("$.user.email").value("citizen@example.com"))
+                .andExpect(jsonPath("$.user.role").value("CITIZEN"))
                 .andExpect(jsonPath("$.password").doesNotExist())
                 .andExpect(jsonPath("$.passwordHash").doesNotExist());
     }
 
     @Test
     void returnsGenericUnauthorizedResponseForInvalidCredentials() throws Exception {
-        when(authService.authenticate("citizen@example.com", "wrong-password"))
+        when(authService.login("citizen@example.com", "wrong-password"))
                 .thenReturn(Optional.empty());
 
         mockMvc.perform(post("/api/auth/login")
@@ -94,7 +113,7 @@ class AuthControllerTest {
 
     @Test
     void preservesPasswordWhitespace() throws Exception {
-        when(authService.authenticate("citizen@example.com", " test-password "))
+        when(authService.login("citizen@example.com", " test-password "))
                 .thenReturn(Optional.empty());
 
         mockMvc.perform(post("/api/auth/login")
@@ -104,6 +123,6 @@ class AuthControllerTest {
                                 """))
                 .andExpect(status().isUnauthorized());
 
-        verify(authService).authenticate("citizen@example.com", " test-password ");
+        verify(authService).login("citizen@example.com", " test-password ");
     }
 }

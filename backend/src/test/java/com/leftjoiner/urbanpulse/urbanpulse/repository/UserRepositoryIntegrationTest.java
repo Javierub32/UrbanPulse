@@ -1,5 +1,7 @@
 package com.leftjoiner.urbanpulse.urbanpulse.repository;
 
+import org.springframework.test.context.ActiveProfiles;
+
 import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
 import jakarta.persistence.EntityManager;
@@ -23,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Testcontainers
+@ActiveProfiles("test")
 @SpringBootTest(properties = "spring.docker.compose.enabled=false")
 @Transactional
 class UserRepositoryIntegrationTest {

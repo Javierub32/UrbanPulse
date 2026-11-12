@@ -1,6 +1,7 @@
 package com.leftjoiner.urbanpulse.urbanpulse.mapper;
 
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentRequest;
+import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentListItemResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.IncidentEntity;
 import org.locationtech.jts.geom.Coordinate;
@@ -29,5 +30,24 @@ public class IncidentMapper extends MapperDTO<IncidentResponse, IncidentEntity> 
         return new IncidentResponse(incident.getId(), incident.getUser().getId(), incident.getTitle(),
                 incident.getDescription(), incident.getCategory(), location.getY(), location.getX(),
                 incident.getPriority(), incident.getStatus(), incident.getRegisteredAt(), incident.getUpdatedAt());
+    }
+
+    public IncidentListItemResponse toListItemDTO(IncidentEntity incident){
+        if (incident == null) return null;
+        Double latitude = null;
+        Double longitude = null;
+        if (incident.getLocation() instanceof Point point) {
+            latitude = point.getY();
+            longitude = point.getX();
+        }
+        return new IncidentListItemResponse(
+            incident.getId(),
+            incident.getTitle(),
+            incident.getCategory(),
+            incident.getStatus(),
+            incident.getRegisteredAt(),
+            latitude,
+            longitude
+        );
     }
 }
