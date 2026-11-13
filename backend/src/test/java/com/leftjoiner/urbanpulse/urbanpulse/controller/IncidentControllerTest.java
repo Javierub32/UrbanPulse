@@ -62,44 +62,48 @@ class IncidentControllerTest {
     @MockitoBean private com.leftjoiner.urbanpulse.urbanpulse.service.IncidentMapService incidentMapService;
 
     @Test
-    void detailIsPublicAndDoesNotExposeTheAuthor() throws Exception {
+    void detailRequiresAuthenticationAndDoesNotExposeTheAuthor() throws Exception {
         UUID id = UUID.randomUUID();
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         var response = new IncidentResponse(id, userId, "Farola", "Apagada", IncidentCategory.STREET_LIGHTING,
                 40.4, -3.7, null, IncidentStatus.REPORTED, null, null);
-        when(service.getIncidentDetail(id)).thenReturn(new IncidentDetailResponse(response, List.of()));
-        mockMvc.perform(get("/api/incidents/{id}", id))
+        when(service.getIncidentDetail(eq(id), any())).thenReturn(new IncidentDetailResponse(response, List.of()));
+        mockMvc.perform(get("/api/incidents/{id}", id)).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/incidents/{id}", id).with(SecurityMockMvcRequestPostProcessors.authentication(citizen())))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id.toString()))
                 .andExpect(jsonPath("$.description").value("Apagada"))
                 .andExpect(jsonPath("$.userId").doesNotExist())
                 .andExpect(jsonPath("$.history").isArray());
-        verify(service).getIncidentDetail(id);
+        verify(service).getIncidentDetail(eq(id), any());
     }
 
     @Test
     void missingIncidentReturns404AndInvalidIdReturns400() throws Exception {
         UUID id = UUID.randomUUID();
-        when(service.getIncidentDetail(id)).thenThrow(new IncidentNotFoundException());
+        when(service.getIncidentDetail(eq(id), any())).thenThrow(new IncidentNotFoundException());
         mockMvc.perform(get("/api/incidents/{id}", id).with(SecurityMockMvcRequestPostProcessors.authentication(citizen())))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("INCIDENT_NOT_FOUND"));
-        mockMvc.perform(get("/api/incidents/not-a-uuid").with(SecurityMockMvcRequestPostProcessors.authentication(citizen())))
+        mockMvc.perform(get("/api/incidents/------------------------------------").with(SecurityMockMvcRequestPostProcessors.authentication(citizen())))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+        mockMvc.perform(get("/api/incidents/future-review").with(SecurityMockMvcRequestPostProcessors.authentication(citizen())))
+                .andExpect(status().isForbidden());
     }
 
     @Test
-    void publicListIsAvailableWithoutAuthenticationAndReturnsMapCoordinates() throws Exception {
+    void listRequiresAuthenticationAndReturnsMapCoordinates() throws Exception {
         UUID id = UUID.randomUUID();
-        when(service.listAllPublicIncidents()).thenReturn(List.of(
+        when(service.listAccessibleIncidents(any())).thenReturn(List.of(
                 new IncidentListItemResponse(id, "Farola", IncidentCategory.STREET_LIGHTING,
                         IncidentStatus.REPORTED, null, 40.4, -3.7)));
 
-        mockMvc.perform(get("/api/incidents/public").header("Origin", "http://localhost:8081"))
+        mockMvc.perform(get("/api/incidents/public")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/incidents/public").with(SecurityMockMvcRequestPostProcessors.authentication(citizen())).header("Origin", "http://localhost:8081"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:8081"))
                 .andExpect(jsonPath("$[0].id").value(id.toString()))
                 .andExpect(jsonPath("$[0].latitude").value(40.4))
                 .andExpect(jsonPath("$[0].longitude").value(-3.7));
-        verify(service).listAllPublicIncidents();
+        verify(service).listAccessibleIncidents(any());
     }
 
     @Test
@@ -115,6 +119,10 @@ class IncidentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/incidents/create'].post.responses['201']").exists())
                 .andExpect(jsonPath("$.paths['/api/incidents/{id}'].get.responses['404']").exists())
+                .andExpect(jsonPath("$.paths['/api/incidents/{id}'].get.responses['401'].content['application/problem+json']").exists())
+                .andExpect(jsonPath("$.paths['/api/incidents/public'].get.responses['403'].content['application/problem+json']").exists())
+                .andExpect(jsonPath("$.paths['/api/incidents/map'].get.security[0].bearerAuth").exists())
+                .andExpect(jsonPath("$.paths['/api/incidents/map-members'].get.responses['401']").exists())
                 .andExpect(jsonPath("$.paths['/api/incidents/create'].post.responses['400'].content['application/problem+json']").exists())
                 .andExpect(jsonPath("$.components.schemas.ProblemResponse.properties.code").exists())
                 .andExpect(jsonPath("$.components.schemas.ProblemResponse.properties.errors").exists());

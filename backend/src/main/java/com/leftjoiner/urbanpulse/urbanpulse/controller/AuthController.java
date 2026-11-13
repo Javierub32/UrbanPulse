@@ -81,7 +81,7 @@ public class AuthController {
 
     @Operation(summary = "Consultar el usuario autenticado", description = "Recupera los datos públicos de una cuenta "
             + "existente y activa. El rol devuelto es el del JWT, que es el utilizado para autorizar las peticiones. "
-            + "Esta consulta explícita accede a la base de datos; el filtro JWT no lo hace.",
+            + "El filtro JWT comprueba que la cuenta siga activa y conserve el rol del token.",
             security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Identidad actual",

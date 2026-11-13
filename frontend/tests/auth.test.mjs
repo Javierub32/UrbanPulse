@@ -15,11 +15,11 @@ const originalFetch = globalThis.fetch;
 const originalWindow = globalThis.window;
 afterEach(() => { globalThis.fetch = originalFetch; globalThis.window = originalWindow; setApiSession(null); });
 
-test('consulta el detalle público sin enviar la sesión y transmite errores', async () => {
+test('consulta el detalle con la sesión y transmite errores', async () => {
   setApiSession('token');
   globalThis.fetch = async (url, options) => {
     assert.ok(url.endsWith('/api/incidents/incident-id'));
-    assert.equal(options.headers.get('Authorization'), null);
+    assert.equal(options.headers.get('Authorization'), 'Bearer token');
     return Response.json({ id: 'incident-id', history: [] });
   };
   assert.deepEqual(await getIncidentDetail('incident-id'), { id: 'incident-id', history: [] });
@@ -218,13 +218,13 @@ test('el formulario de incidencias usa Bearer y no envía un usuario de prueba',
   assert.deepEqual(await createIncident(incident), { id: 'incidencia' });
 });
 
-test('el listado público usa el cliente común sin enviar el token', async () => {
+test('el listado usa el cliente común y envía el token', async () => {
   const { getIncidents } = await import('../src/pages/report/services/report-service.ts');
   const incidents = [{ id: '1', title: 'Farola', latitude: 40.4, longitude: -3.7 }];
   setApiSession('token-ciudadano');
   globalThis.fetch = async (url, options) => {
     assert.ok(url.endsWith('/api/incidents/public'));
-    assert.equal(options.headers.get('Authorization'), null);
+    assert.equal(options.headers.get('Authorization'), 'Bearer token-ciudadano');
     return Response.json(incidents);
   };
   assert.deepEqual(await getIncidents(), incidents);

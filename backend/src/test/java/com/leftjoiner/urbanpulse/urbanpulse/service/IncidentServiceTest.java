@@ -14,6 +14,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Point;
+import com.leftjoiner.urbanpulse.urbanpulse.security.UrbanPulsePrincipal;
+import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -27,7 +29,7 @@ class IncidentServiceTest {
         UUID incidentId = UUID.randomUUID();
         when(incidents.findById(incidentId)).thenReturn(Optional.empty());
         assertThrows(com.leftjoiner.urbanpulse.urbanpulse.exception.IncidentNotFoundException.class,
-                () -> service.getIncidentDetail(incidentId));
+                () -> service.getIncidentDetail(incidentId, new UrbanPulsePrincipal(UUID.randomUUID(), UserRole.OPERATOR)));
         verify(incidents).findById(incidentId);
         verifyNoInteractions(history);
     }

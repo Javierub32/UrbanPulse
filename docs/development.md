@@ -149,7 +149,7 @@ Existe un comando `npm run lint`, aunque la configuración de ESLint todavía es
 
 Para una comprobación manual, arranca la API y la app, consulta el listado y el mapa, y registra una incidencia. Comprueba que aparece después de volver a consultar los datos.
 
-Para enviar avisos, registra una cuenta e inicia sesión: el backend obtiene el autor del token. El listado público no requiere autenticación.
+Para enviar avisos y consultar las incidencias permitidas, registra una cuenta e inicia sesión: el backend obtiene el usuario del token y aplica los permisos de su rol.
 
 ## Consultar la API
 

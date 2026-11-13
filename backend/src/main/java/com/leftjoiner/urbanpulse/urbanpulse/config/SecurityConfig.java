@@ -3,6 +3,7 @@ package com.leftjoiner.urbanpulse.urbanpulse.config;
 import com.leftjoiner.urbanpulse.urbanpulse.security.JwtAuthenticationFilter;
 import com.leftjoiner.urbanpulse.urbanpulse.security.JwtService;
 import com.leftjoiner.urbanpulse.urbanpulse.security.SecurityProblemHandler;
+import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import jakarta.servlet.DispatcherType;
@@ -19,6 +20,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.RegexRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -30,6 +32,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
     private final JwtService jwtService;
     private final SecurityProblemHandler problemHandler;
+    private final UserRepository userRepository;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, CorsConfigurationSource corsConfigurationSource)
@@ -47,11 +50,14 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/incidents/public").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/incidents/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/incidents/public", "/api/incidents/map",
+                                "/api/incidents/map-members")
+                                .hasAnyRole("CITIZEN", "OPERATOR", "TECHNICIAN")
+                        .requestMatchers(new RegexRequestMatcher("^/api/incidents/[0-9a-fA-F-]{36}(?:\\?.*)?$", "GET"))
+                                .hasAnyRole("CITIZEN", "OPERATOR", "TECHNICIAN")
                         .requestMatchers(HttpMethod.POST, "/api/incidents/create").hasRole("CITIZEN")
                         .anyRequest().denyAll())
-                .addFilterBefore(new JwtAuthenticationFilter(jwtService, problemHandler),
+                .addFilterBefore(new JwtAuthenticationFilter(jwtService, problemHandler, userRepository),
                         UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
