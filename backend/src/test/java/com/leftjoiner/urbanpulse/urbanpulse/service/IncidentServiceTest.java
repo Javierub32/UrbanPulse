@@ -6,10 +6,12 @@ import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
 import org.springframework.security.authentication.BadCredentialsException;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.IncidentMapper;
+import com.leftjoiner.urbanpulse.urbanpulse.mapper.AtmosphericContextMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.StatusChangeMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.IncidentRepository;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.StatusChangeRepository;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
+import com.leftjoiner.urbanpulse.urbanpulse.repository.UrbanContextRepository;
 import java.util.Optional;
 import java.util.UUID;
 import java.time.Instant;
@@ -29,7 +31,8 @@ class IncidentServiceTest {
         var incidents = mock(IncidentRepository.class);
         var history = mock(StatusChangeRepository.class);
         var service = new IncidentService(incidents, mock(UserRepository.class), new IncidentMapper(), history,
-                mock(StatusChangeMapper.class), mock(AtmosphericIncidentEnrichmentService.class));
+                mock(StatusChangeMapper.class), mock(AtmosphericIncidentEnrichmentService.class),
+                mock(UrbanContextRepository.class), new AtmosphericContextMapper());
         UUID incidentId = UUID.randomUUID();
         when(incidents.findById(incidentId)).thenReturn(Optional.empty());
         assertThrows(com.leftjoiner.urbanpulse.urbanpulse.exception.IncidentNotFoundException.class,
@@ -44,7 +47,8 @@ class IncidentServiceTest {
         var mapper = new IncidentMapper();
         var service = new IncidentService(incidents, users, mapper,
                 mock(StatusChangeRepository.class), mock(StatusChangeMapper.class),
-                mock(AtmosphericIncidentEnrichmentService.class));
+                mock(AtmosphericIncidentEnrichmentService.class), mock(UrbanContextRepository.class),
+                new AtmosphericContextMapper());
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
         user.setActive(true);
@@ -71,7 +75,8 @@ class IncidentServiceTest {
         var users = mock(UserRepository.class);
         var service = new IncidentService(incidents, users, new IncidentMapper(),
                 mock(StatusChangeRepository.class), mock(StatusChangeMapper.class),
-                mock(AtmosphericIncidentEnrichmentService.class));
+                mock(AtmosphericIncidentEnrichmentService.class), mock(UrbanContextRepository.class),
+                new AtmosphericContextMapper());
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
         user.setActive(true);
@@ -94,7 +99,8 @@ class IncidentServiceTest {
         var mapper = new IncidentMapper();
         var service = new IncidentService(incidents, users, mapper,
                 mock(StatusChangeRepository.class), mock(StatusChangeMapper.class),
-                mock(AtmosphericIncidentEnrichmentService.class));
+                mock(AtmosphericIncidentEnrichmentService.class), mock(UrbanContextRepository.class),
+                new AtmosphericContextMapper());
         IncidentRequest request = request();
         UUID id = UUID.randomUUID();
         when(users.findById(id)).thenReturn(Optional.empty());
@@ -108,7 +114,8 @@ class IncidentServiceTest {
         var users = mock(UserRepository.class);
         var service = new IncidentService(incidents, users, new IncidentMapper(),
                 mock(StatusChangeRepository.class), mock(StatusChangeMapper.class),
-                mock(AtmosphericIncidentEnrichmentService.class));
+                mock(AtmosphericIncidentEnrichmentService.class), mock(UrbanContextRepository.class),
+                new AtmosphericContextMapper());
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
         when(users.findById(user.getId())).thenReturn(Optional.of(user));

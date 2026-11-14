@@ -10,4 +10,6 @@ public interface UrbanContextRepository extends JpaRepository<UrbanContextEntity
     Optional<UrbanContextEntity> findByIncident_IdAndKeyAndSource(UUID incidentId, String key, String source);
 
     List<UrbanContextEntity> findAllByIncident_IdOrderByKeyAsc(UUID incidentId);
+
+    List<UrbanContextEntity> findAllByIncident_IdAndKeyInOrderByKeyAsc(UUID incidentId, List<String> keys);
 }

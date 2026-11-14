@@ -14,6 +14,7 @@ import { getIncidentDetail } from './services/incident-detail-service';
 type State = { status: 'loading' } | { status: 'error'; message: string; retry: boolean } | { status: 'success'; data: IncidentDetail };
 const statuses: Record<string, string> = { REPORTED: 'Comunicada', VALIDATED: 'Validada', REJECTED: 'Rechazada', ASSIGNED: 'Asignada', IN_PROGRESS: 'En curso', RESOLVED: 'Resuelta', REOPENED: 'Reabierta', CLOSED: 'Cerrada' };
 const priorities: Record<string, string> = { LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta', CRITICAL: 'Crítica' };
+const atmosphericLabels: Record<string, string> = { precipitation: 'Precipitación', pm2_5: 'Partículas PM2.5', pm10: 'Partículas PM10', nitrogen_dioxide: 'Dióxido de nitrógeno' };
 const label = (value: string | null, labels: Record<string, string>) => value ? (labels[value] ?? value) : 'No disponible';
 const date = (value: string | null) => {
   if (!value) return 'No disponible';
@@ -73,6 +74,14 @@ function IncidentDetailContent({ id }: { id: string }) {
         {field('Fecha y hora de la incidencia', date(state.data.registeredAt))}
         {field('Actualizada', date(state.data.updatedAt))}
         {field('Ubicación', state.data.latitude != null && state.data.longitude != null ? `${state.data.latitude}, ${state.data.longitude}` : 'No disponible')}
+      </View>
+      <View style={{ gap: Spacing.three }}><ThemedText type="smallBold">Datos atmosféricos</ThemedText>
+        {(state.data.atmosphericData ?? []).length === 0
+          ? <ThemedText themeColor="textSecondary">No hay datos atmosféricos disponibles para esta incidencia.</ThemedText>
+          : state.data.atmosphericData.map((reading, index) => <View key={`${reading.key}-${reading.source}-${index}`} style={{ gap: Spacing.one, paddingVertical: Spacing.two, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }}>
+              {field(atmosphericLabels[reading.key] ?? reading.key, `${reading.value} ${reading.unit}`)}
+              <ThemedText type="small" themeColor="textSecondary">{reading.source}{reading.observedAt ? ` · ${date(reading.observedAt)}` : ''}</ThemedText>
+            </View>)}
       </View>
       <View style={{ gap: Spacing.three }}><ThemedText type="smallBold">Historial</ThemedText>
         {state.data.history.length === 0 ? <ThemedText themeColor="textSecondary">No hay cambios de estado registrados.</ThemedText> : state.data.history.map((entry, index) => <View key={`${entry.changedAt}-${index}`} style={{ flexDirection: 'row', gap: Spacing.three }}><View style={{ width: 10, height: 10, borderRadius: 5, marginTop: 7, backgroundColor: theme.accent }} /><View style={{ flex: 1, gap: Spacing.one }}><ThemedText>{entry.previousStatus ? `${label(entry.previousStatus, statuses)} → ` : ''}{label(entry.status, statuses)}</ThemedText><ThemedText type="small" themeColor="textSecondary">{date(entry.changedAt)}</ThemedText></View></View>)}

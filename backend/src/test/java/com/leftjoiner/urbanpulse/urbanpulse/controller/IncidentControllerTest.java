@@ -67,7 +67,7 @@ class IncidentControllerTest {
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         var response = new IncidentResponse(id, userId, "Farola", "Apagada", IncidentCategory.STREET_LIGHTING,
                 40.4, -3.7, null, IncidentStatus.REPORTED, null, null);
-        when(service.getIncidentDetail(eq(id), any())).thenReturn(new IncidentDetailResponse(response, List.of()));
+        when(service.getIncidentDetail(eq(id), any())).thenReturn(new IncidentDetailResponse(response, List.of(), List.of()));
         mockMvc.perform(get("/api/incidents/{id}", id)).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/incidents/{id}", id).with(SecurityMockMvcRequestPostProcessors.authentication(citizen())))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(id.toString()))

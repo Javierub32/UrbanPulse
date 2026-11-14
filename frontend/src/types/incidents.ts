@@ -19,4 +19,5 @@ export type IncidentDetail = IncidentListItem & {
   priority: string | null;
   updatedAt: string | null;
   history: { previousStatus: string | null; status: string; changedAt: string | null }[];
+  atmosphericData: { key: string; value: string; unit: string; source: string; observedAt: string | null }[];
 };
