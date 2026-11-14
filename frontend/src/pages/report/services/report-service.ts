@@ -13,7 +13,7 @@ export const categories = [
   { value: 'OTHER', label: 'Otra' },
 ] as const;
 export type Category = (typeof categories)[number]['value'];
-type Incident = Coordinate & { title: string; description: string; category: Category };
+type Incident = Coordinate & { title: string; description: string; category: Category; registeredAt: string };
 
 export function createIncident(incident: Incident) {
   return apiRequest<{ id: string }>('/api/incidents/create', { method: 'POST', body: JSON.stringify(incident) });

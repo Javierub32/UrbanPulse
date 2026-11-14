@@ -13,6 +13,7 @@ import { ThemedText } from "@/components/themed-text";
 import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import LocationMap from "@/pages/report/components/location-map";
+import IncidentDateTimePicker from "@/pages/report/components/incident-date-time-picker";
 import { useReportForm } from "@/pages/report/hooks/use-report-form";
 import {
   useReportLocation,
@@ -131,6 +132,10 @@ export default function ReportScreen() {
               </Pressable>
             ))}
           </View>
+        </View>
+        <View style={{ gap: Spacing.two }}>
+          <ThemedText type="smallBold">Fecha y hora de la incidencia</ThemedText>
+          <IncidentDateTimePicker value={form.registeredAt} onChange={form.setRegisteredAt} disabled={form.busy} />
         </View>
         <View style={{ gap: Spacing.three }}>
           <ThemedText type="smallBold">Ubicación de la incidencia</ThemedText>

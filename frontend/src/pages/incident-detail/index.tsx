@@ -70,7 +70,7 @@ function IncidentDetailContent({ id }: { id: string }) {
       <View style={{ gap: Spacing.two }}><ThemedText type="smallBold">Descripción</ThemedText><ThemedText selectable>{state.data.description || 'No disponible'}</ThemedText></View>
       <View style={{ gap: Spacing.two }}><ThemedText type="smallBold">Información</ThemedText>
         {field('Prioridad', label(state.data.priority, priorities))}
-        {field('Registrada', date(state.data.registeredAt))}
+        {field('Fecha y hora de la incidencia', date(state.data.registeredAt))}
         {field('Actualizada', date(state.data.updatedAt))}
         {field('Ubicación', state.data.latitude != null && state.data.longitude != null ? `${state.data.latitude}, ${state.data.longitude}` : 'No disponible')}
       </View>
