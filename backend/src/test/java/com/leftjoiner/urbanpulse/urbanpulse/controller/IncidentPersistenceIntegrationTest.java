@@ -2,6 +2,8 @@ package com.leftjoiner.urbanpulse.urbanpulse.controller;
 
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
 import com.leftjoiner.urbanpulse.urbanpulse.security.JwtService;
+import com.leftjoiner.urbanpulse.urbanpulse.integration.openmeteo.OpenMeteoClient;
+import com.leftjoiner.urbanpulse.urbanpulse.integration.openmeteo.OpenMeteoException;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
@@ -9,6 +11,7 @@ import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.IncidentRepository;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
 import java.util.UUID;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Point;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +21,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -28,6 +32,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.Mockito.when;
 
 @Testcontainers
 @ActiveProfiles("test")
@@ -46,6 +53,7 @@ class IncidentPersistenceIntegrationTest {
     @Autowired JwtService jwtService;
     @Autowired IncidentRepository incidents;
     @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @MockitoBean OpenMeteoClient openMeteoClient;
 
     @Test
     void mapGroupsAndFiltersMoreThanFiftyIncidents() throws Exception {
@@ -233,6 +241,10 @@ class IncidentPersistenceIntegrationTest {
 
     @Test
     void createsAndReadsIncidentFromPostgis() throws Exception {
+        when(openMeteoClient.fetchPrecipitation(anyDouble(), anyDouble(), any(Instant.class)))
+                .thenThrow(new OpenMeteoException("Weather service unavailable."));
+        when(openMeteoClient.fetchAirQuality(anyDouble(), anyDouble(), any(Instant.class)))
+                .thenThrow(new OpenMeteoException("Air quality service unavailable."));
         UserEntity user = new UserEntity();
         user.setActive(true);
         user.setRole(UserRole.CITIZEN);

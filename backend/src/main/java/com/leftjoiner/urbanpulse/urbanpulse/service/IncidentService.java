@@ -39,6 +39,7 @@ public class IncidentService {
     private final IncidentMapper incidentMapper;
     private final StatusChangeRepository statusChangeRepository;
     private final StatusChangeMapper statusChangeMapper;
+    private final AtmosphericIncidentEnrichmentService atmosphericIncidentEnrichmentService;
 
     private static final int MAX_PAGE_SIZE = 100;
 
@@ -55,7 +56,9 @@ public class IncidentService {
             incident.setRegisteredAt(now);
         }
         incident.setUpdatedAt(now);
-        return incidentMapper.toDTO(incidentRepository.save(incident));
+        IncidentEntity savedIncident = incidentRepository.save(incident);
+        atmosphericIncidentEnrichmentService.enrich(savedIncident);
+        return incidentMapper.toDTO(savedIncident);
     }
 
     @Transactional(readOnly = true)
