@@ -12,6 +12,9 @@ import com.leftjoiner.urbanpulse.urbanpulse.repository.StatusChangeRepository;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Point;
 import com.leftjoiner.urbanpulse.urbanpulse.security.UrbanPulsePrincipal;
@@ -58,6 +61,27 @@ class IncidentServiceTest {
         assertEquals(4326, point.getSRID());
         assertEquals(-3.7, point.getX());
         assertEquals(40.4, point.getY());
+    }
+
+    @Test
+    void usesSelectedRegistrationTimeAndKeepsUpdateTimeCurrent() {
+        var incidents = mock(IncidentRepository.class);
+        var users = mock(UserRepository.class);
+        var service = new IncidentService(incidents, users, new IncidentMapper(),
+                mock(StatusChangeRepository.class), mock(StatusChangeMapper.class));
+        UserEntity user = new UserEntity();
+        user.setId(UUID.randomUUID());
+        user.setActive(true);
+        when(users.findById(user.getId())).thenReturn(Optional.of(user));
+        when(incidents.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        Instant selected = Instant.parse("2026-11-13T15:20:00Z");
+        IncidentRequest request = request();
+        request.setRegisteredAt(selected);
+
+        var response = service.create(request, user.getId());
+
+        assertEquals(LocalDateTime.ofInstant(selected, ZoneOffset.UTC), response.getRegisteredAt());
+        assertNotNull(response.getUpdatedAt());
     }
 
     @Test

@@ -155,14 +155,17 @@ class IncidentControllerTest {
         UUID id = UUID.randomUUID();
         UUID userId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         IncidentResponse response = new IncidentResponse(id, userId, "Farola", "Apagada", IncidentCategory.STREET_LIGHTING,
-                40.4, -3.7, null, IncidentStatus.REPORTED, null, null);
+                40.4, -3.7, null, IncidentStatus.REPORTED,
+                java.time.LocalDateTime.of(2026, 11, 13, 15, 20), null);
         when(service.create(any(), any())).thenReturn(response);
         mockMvc.perform(post("/api/incidents/create").with(SecurityMockMvcRequestPostProcessors.authentication(citizen())).contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"userId":"%s","title":"Farola","description":"Apagada",
-                         "category":"STREET_LIGHTING","latitude":40.4,"longitude":-3.7}
+                         "category":"STREET_LIGHTING","latitude":40.4,"longitude":-3.7,
+                         "registeredAt":"2026-11-13T15:20:00Z"}
                         """.formatted(userId)))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.id").value(id.toString()))
+                .andExpect(jsonPath("$.registeredAt").value("2026-11-13T15:20:00"))
                 .andExpect(jsonPath("$.status").value("REPORTED"))
                 .andExpect(jsonPath("$.priority").doesNotExist());
         verify(service).create(any(), eq(userId));

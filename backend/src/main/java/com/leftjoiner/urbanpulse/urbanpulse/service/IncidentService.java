@@ -51,7 +51,9 @@ public class IncidentService {
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         incident.setUser(user);
         incident.setStatus(IncidentStatus.REPORTED);
-        incident.setRegisteredAt(now);
+        if (incident.getRegisteredAt() == null) {
+            incident.setRegisteredAt(now);
+        }
         incident.setUpdatedAt(now);
         return incidentMapper.toDTO(incidentRepository.save(incident));
     }

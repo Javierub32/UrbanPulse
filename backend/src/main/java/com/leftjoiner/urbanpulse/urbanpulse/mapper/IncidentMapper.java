@@ -19,6 +19,9 @@ public class IncidentMapper extends MapperDTO<IncidentResponse, IncidentEntity> 
         incident.setTitle(request.getTitle().trim());
         incident.setDescription(request.getDescription().trim());
         incident.setCategory(request.getCategory());
+        if (request.getRegisteredAt() != null) {
+            incident.setRegisteredAt(request.getRegisteredAt().atZone(java.time.ZoneOffset.UTC).toLocalDateTime());
+        }
         incident.setLocation(geometryFactory.createPoint(new Coordinate(request.getLongitude(), request.getLatitude())));
         return incident;
     }
