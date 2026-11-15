@@ -369,7 +369,7 @@ export default function ReportScreen() {
           if (
             await form.submit(
               location.mode === "assets" ? null : location.coordinate,
-              location.mode === "current" ? location.street : null,
+              location.mode === "assets" ? null : location.street,
             )
           )
             location.reset();

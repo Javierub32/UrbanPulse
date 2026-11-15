@@ -14,6 +14,20 @@ export function useReportLocation() {
   const [streetStatus, setStreetStatus] = useState<'idle' | 'loading' | 'unavailable'>('idle');
   const requestId = useRef(0);
 
+  async function lookupStreet(next: Coordinate, id: number) {
+    if (Platform.OS === 'web') return;
+
+    setStreetStatus('loading');
+    try {
+      const resultStreet = await getStreet(next);
+      if (id !== requestId.current) return;
+      setStreet(resultStreet);
+      setStreetStatus(resultStreet ? 'idle' : 'unavailable');
+    } catch {
+      if (id === requestId.current) setStreetStatus('unavailable');
+    }
+  }
+
   async function locate() {
     const id = ++requestId.current;
     setStatus('loading');
@@ -28,17 +42,7 @@ export function useReportLocation() {
       } else {
         setCoordinate(result.coordinate);
         setStatus('idle');
-        if (Platform.OS !== 'web') {
-          setStreetStatus('loading');
-          try {
-            const resultStreet = await getStreet(result.coordinate);
-            if (id !== requestId.current) return;
-            setStreet(resultStreet);
-            setStreetStatus(resultStreet ? 'idle' : 'unavailable');
-          } catch {
-            if (id === requestId.current) setStreetStatus('unavailable');
-          }
-        }
+        await lookupStreet(result.coordinate, id);
       }
     } catch {
       if (id === requestId.current) setStatus('error');
@@ -56,11 +60,12 @@ export function useReportLocation() {
   }
 
   function selectCoordinate(next: Coordinate) {
-    requestId.current += 1;
+    const id = ++requestId.current;
     setStatus('idle');
     setCoordinate(next);
     setStreet(null);
     setStreetStatus('idle');
+    void lookupStreet(next, id);
   }
 
   function reset() {

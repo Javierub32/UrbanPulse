@@ -16,8 +16,15 @@ export async function getCurrentLocation() {
 }
 
 export async function getStreet(coordinate: Coordinate): Promise<string | null> {
-  // Web performs the street lookup on the backend after the incident is saved.
   if (Platform.OS === 'web') return null;
+
+  if (Platform.OS === 'android') {
+    let permission = await Location.getForegroundPermissionsAsync();
+    if (!permission.granted && permission.canAskAgain) {
+      permission = await Location.requestForegroundPermissionsAsync();
+    }
+    if (!permission.granted) return null;
+  }
 
   const [address] = await Location.reverseGeocodeAsync(coordinate);
   if (!address?.street?.trim()) return null;
