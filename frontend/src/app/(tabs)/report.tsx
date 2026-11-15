@@ -300,8 +300,7 @@ export default function ReportScreen() {
                 </View>
               )}
               <ThemedText themeColor="textSecondary" type="small">
-                Toca el mapa para marcar el lugar o arrastra el marcador para
-                ajustarlo.
+                Toca el mapa para marcar o ajustar la ubicación.
               </ThemedText>
               <LocationMap
                 coordinate={location.coordinate}
