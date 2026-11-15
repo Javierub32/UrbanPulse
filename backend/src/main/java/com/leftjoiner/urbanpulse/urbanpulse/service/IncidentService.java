@@ -43,6 +43,7 @@ public class IncidentService {
     private final StatusChangeRepository statusChangeRepository;
     private final StatusChangeMapper statusChangeMapper;
     private final AtmosphericIncidentEnrichmentService atmosphericIncidentEnrichmentService;
+    private final StreetIncidentEnrichmentService streetIncidentEnrichmentService;
     private final UrbanContextRepository urbanContextRepository;
     private final AtmosphericContextMapper atmosphericContextMapper;
 
@@ -63,6 +64,7 @@ public class IncidentService {
         incident.setUpdatedAt(now);
         IncidentEntity savedIncident = incidentRepository.save(incident);
         atmosphericIncidentEnrichmentService.enrich(savedIncident);
+        streetIncidentEnrichmentService.enrich(savedIncident);
         return incidentMapper.toDTO(savedIncident);
     }
 
