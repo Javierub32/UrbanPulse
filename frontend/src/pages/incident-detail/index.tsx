@@ -73,7 +73,8 @@ function IncidentDetailContent({ id }: { id: string }) {
         {field('Prioridad', label(state.data.priority, priorities))}
         {field('Fecha y hora de la incidencia', date(state.data.registeredAt))}
         {field('Actualizada', date(state.data.updatedAt))}
-        {field('Ubicación', state.data.latitude != null && state.data.longitude != null ? `${state.data.latitude}, ${state.data.longitude}` : 'No disponible')}
+        {field('Calle', state.data.normalizedAddress || 'No disponible')}
+        {field('Coordenadas', state.data.latitude != null && state.data.longitude != null ? `${state.data.latitude}, ${state.data.longitude}` : 'No disponible')}
       </View>
       <View style={{ gap: Spacing.two }}><ThemedText type="smallBold">Datos atmosféricos</ThemedText>
         {(state.data.atmosphericData ?? []).length === 0

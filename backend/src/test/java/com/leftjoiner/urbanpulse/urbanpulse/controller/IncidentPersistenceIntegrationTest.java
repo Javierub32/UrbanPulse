@@ -4,8 +4,6 @@ import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
 import com.leftjoiner.urbanpulse.urbanpulse.security.JwtService;
 import com.leftjoiner.urbanpulse.urbanpulse.integration.openmeteo.OpenMeteoClient;
 import com.leftjoiner.urbanpulse.urbanpulse.integration.openmeteo.OpenMeteoException;
-import com.leftjoiner.urbanpulse.urbanpulse.integration.streetlookup.StreetClient;
-import com.leftjoiner.urbanpulse.urbanpulse.integration.streetlookup.StreetLookupUnavailableException;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.leftjoiner.urbanpulse.urbanpulse.entity.UserEntity;
@@ -29,7 +27,6 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.json.JsonMapper;
-import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -57,7 +54,6 @@ class IncidentPersistenceIntegrationTest {
     @Autowired IncidentRepository incidents;
     @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
     @MockitoBean OpenMeteoClient openMeteoClient;
-    @MockitoBean StreetClient streetClient;
 
     @Test
     void mapGroupsAndFiltersMoreThanFiftyIncidents() throws Exception {
@@ -249,7 +245,6 @@ class IncidentPersistenceIntegrationTest {
                 .thenThrow(new OpenMeteoException("Weather service unavailable."));
         when(openMeteoClient.fetchAirQuality(anyDouble(), anyDouble(), any(Instant.class)))
                 .thenThrow(new OpenMeteoException("Air quality service unavailable."));
-        when(streetClient.findStreet(40.4, -3.7)).thenReturn(Optional.of("Calle Prueba 1"));
         UserEntity user = new UserEntity();
         user.setActive(true);
         user.setRole(UserRole.CITIZEN);
@@ -257,7 +252,8 @@ class IncidentPersistenceIntegrationTest {
         String body = mockMvc.perform(post("/api/incidents/create").header("Authorization", "Bearer " + jwtService.issue(user.getId(), user.getRole())).contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"title":"Farola","description":"Apagada",
-                     "category":"STREET_LIGHTING","latitude":40.4,"longitude":-3.7}
+                     "category":"STREET_LIGHTING","latitude":40.4,"longitude":-3.7,
+                     "normalizedAddress":"Calle Prueba 1"}
                     """))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         UUID id = UUID.fromString(JsonMapper.builder().build().readTree(body).path("id").asString());
@@ -298,13 +294,11 @@ class IncidentPersistenceIntegrationTest {
     }
 
     @Test
-    void createsIncidentWhenStreetProviderIsUnavailable() throws Exception {
+    void createsIncidentWithoutStreetAndKeepsCoordinates() throws Exception {
         when(openMeteoClient.fetchPrecipitation(anyDouble(), anyDouble(), any(Instant.class)))
                 .thenThrow(new OpenMeteoException("Weather service unavailable."));
         when(openMeteoClient.fetchAirQuality(anyDouble(), anyDouble(), any(Instant.class)))
                 .thenThrow(new OpenMeteoException("Air quality service unavailable."));
-        when(streetClient.findStreet(40.4, -3.7))
-                .thenThrow(new StreetLookupUnavailableException("Street service unavailable."));
         UserEntity user = createUser(UserRole.CITIZEN);
         String token = jwtService.issue(user.getId(), user.getRole());
 

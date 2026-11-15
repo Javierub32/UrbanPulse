@@ -31,7 +31,7 @@ class IncidentServiceTest {
         var incidents = mock(IncidentRepository.class);
         var history = mock(StatusChangeRepository.class);
         var service = new IncidentService(incidents, mock(UserRepository.class), new IncidentMapper(), history,
-                mock(StatusChangeMapper.class), mock(AtmosphericIncidentEnrichmentService.class), mock(StreetIncidentEnrichmentService.class),
+                mock(StatusChangeMapper.class), mock(AtmosphericIncidentEnrichmentService.class),
                 mock(UrbanContextRepository.class), new AtmosphericContextMapper());
         UUID incidentId = UUID.randomUUID();
         when(incidents.findById(incidentId)).thenReturn(Optional.empty());
@@ -45,10 +45,9 @@ class IncidentServiceTest {
         var incidents = mock(IncidentRepository.class);
         var users = mock(UserRepository.class);
         var mapper = new IncidentMapper();
-        var streetEnrichment = mock(StreetIncidentEnrichmentService.class);
         var service = new IncidentService(incidents, users, mapper,
                 mock(StatusChangeRepository.class), mock(StatusChangeMapper.class),
-                mock(AtmosphericIncidentEnrichmentService.class), streetEnrichment,
+                mock(AtmosphericIncidentEnrichmentService.class),
                 mock(UrbanContextRepository.class),
                 new AtmosphericContextMapper());
         UserEntity user = new UserEntity();
@@ -70,9 +69,7 @@ class IncidentServiceTest {
         assertEquals(-3.7, point.getX());
         assertEquals(40.4, point.getY());
 
-        var order = inOrder(incidents, streetEnrichment);
-        order.verify(incidents).save(any());
-        order.verify(streetEnrichment).enrich(any());
+        verify(incidents).save(any());
     }
 
     @Test
@@ -81,7 +78,7 @@ class IncidentServiceTest {
         var users = mock(UserRepository.class);
         var service = new IncidentService(incidents, users, new IncidentMapper(),
                 mock(StatusChangeRepository.class), mock(StatusChangeMapper.class),
-                mock(AtmosphericIncidentEnrichmentService.class), mock(StreetIncidentEnrichmentService.class), mock(UrbanContextRepository.class),
+                mock(AtmosphericIncidentEnrichmentService.class), mock(UrbanContextRepository.class),
                 new AtmosphericContextMapper());
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
@@ -105,7 +102,7 @@ class IncidentServiceTest {
         var mapper = new IncidentMapper();
         var service = new IncidentService(incidents, users, mapper,
                 mock(StatusChangeRepository.class), mock(StatusChangeMapper.class),
-                mock(AtmosphericIncidentEnrichmentService.class), mock(StreetIncidentEnrichmentService.class), mock(UrbanContextRepository.class),
+                mock(AtmosphericIncidentEnrichmentService.class), mock(UrbanContextRepository.class),
                 new AtmosphericContextMapper());
         IncidentRequest request = request();
         UUID id = UUID.randomUUID();
@@ -120,7 +117,7 @@ class IncidentServiceTest {
         var users = mock(UserRepository.class);
         var service = new IncidentService(incidents, users, new IncidentMapper(),
                 mock(StatusChangeRepository.class), mock(StatusChangeMapper.class),
-                mock(AtmosphericIncidentEnrichmentService.class), mock(StreetIncidentEnrichmentService.class), mock(UrbanContextRepository.class),
+                mock(AtmosphericIncidentEnrichmentService.class), mock(UrbanContextRepository.class),
                 new AtmosphericContextMapper());
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());

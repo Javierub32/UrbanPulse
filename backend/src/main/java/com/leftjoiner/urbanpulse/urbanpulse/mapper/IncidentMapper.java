@@ -19,6 +19,9 @@ public class IncidentMapper extends MapperDTO<IncidentResponse, IncidentEntity> 
         incident.setTitle(request.getTitle().trim());
         incident.setDescription(request.getDescription().trim());
         incident.setCategory(request.getCategory());
+        if (request.getNormalizedAddress() != null && !request.getNormalizedAddress().isBlank()) {
+            incident.setNormalizedAddress(request.getNormalizedAddress().trim());
+        }
         if (request.getRegisteredAt() != null) {
             incident.setRegisteredAt(request.getRegisteredAt().atZone(java.time.ZoneOffset.UTC).toLocalDateTime());
         }

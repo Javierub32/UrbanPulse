@@ -16,6 +16,7 @@ export type IncidentListItem = {
 
 export type IncidentDetail = IncidentListItem & {
   description: string | null;
+  normalizedAddress: string | null;
   priority: string | null;
   updatedAt: string | null;
   history: { previousStatus: string | null; status: string; changedAt: string | null }[];

@@ -39,4 +39,9 @@ public class IncidentRequest {
 
     @Schema(description = "Fecha y hora de registro elegida para la incidencia, como instante ISO-8601. Si se omite, se usa la hora actual.", example = "2026-11-14T13:32:00Z")
     private Instant registeredAt;
+
+    @Size(max = 255)
+    @Schema(description = "Calle obtenida por la app al seleccionar la ubicación. Si se omite, el servidor intentará obtenerla.", example = "Calle Larios 1")
+    private String normalizedAddress;
+
 }

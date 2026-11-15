@@ -20,11 +20,17 @@ public class IncidentDetailResponse {
     private final IncidentStatus status;
     private final LocalDateTime registeredAt;
     private final LocalDateTime updatedAt;
+    private final String normalizedAddress;
     private final List<IncidentHistoryResponse> history;
     private final List<IncidentAtmosphericDataResponse> atmosphericData;
 
     public IncidentDetailResponse(IncidentResponse incident, List<IncidentHistoryResponse> history,
             List<IncidentAtmosphericDataResponse> atmosphericData) {
+        this(incident, history, atmosphericData, null);
+    }
+
+    public IncidentDetailResponse(IncidentResponse incident, List<IncidentHistoryResponse> history,
+            List<IncidentAtmosphericDataResponse> atmosphericData, String normalizedAddress) {
         this.id = incident.getId();
         this.title = incident.getTitle();
         this.description = incident.getDescription();
@@ -35,6 +41,7 @@ public class IncidentDetailResponse {
         this.status = incident.getStatus();
         this.registeredAt = incident.getRegisteredAt();
         this.updatedAt = incident.getUpdatedAt();
+        this.normalizedAddress = normalizedAddress;
         this.history = List.copyOf(history);
         this.atmosphericData = List.copyOf(atmosphericData);
     }

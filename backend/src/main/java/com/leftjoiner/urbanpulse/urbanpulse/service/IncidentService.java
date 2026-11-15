@@ -43,7 +43,6 @@ public class IncidentService {
     private final StatusChangeRepository statusChangeRepository;
     private final StatusChangeMapper statusChangeMapper;
     private final AtmosphericIncidentEnrichmentService atmosphericIncidentEnrichmentService;
-    private final StreetIncidentEnrichmentService streetIncidentEnrichmentService;
     private final UrbanContextRepository urbanContextRepository;
     private final AtmosphericContextMapper atmosphericContextMapper;
 
@@ -64,7 +63,6 @@ public class IncidentService {
         incident.setUpdatedAt(now);
         IncidentEntity savedIncident = incidentRepository.save(incident);
         atmosphericIncidentEnrichmentService.enrich(savedIncident);
-        streetIncidentEnrichmentService.enrich(savedIncident);
         return incidentMapper.toDTO(savedIncident);
     }
 
@@ -113,7 +111,7 @@ public class IncidentService {
                 .stream()
                 .map(atmosphericContextMapper::toDTO)
                 .toList();
-        return new IncidentDetailResponse(response, history, atmosphericData);
+        return new IncidentDetailResponse(response, history, atmosphericData, incident.getNormalizedAddress());
     }
 
     @Transactional(readOnly = true)

@@ -12,7 +12,7 @@ export function useReportForm() {
   const [success, setSuccess] = useState(false);
   const pending = useRef(false);
 
-  async function submit(coordinate: Coordinate | null) {
+  async function submit(coordinate: Coordinate | null, normalizedAddress: string | null) {
     if (pending.current) return false;
     setSuccess(false);
     if (!title.trim() || !description.trim() || !category || !coordinate) {
@@ -20,7 +20,7 @@ export function useReportForm() {
     }
     pending.current = true; setBusy(true); setError('');
     try {
-      await createIncident({ title: title.trim(), description: description.trim(), category, registeredAt: registeredAt.toISOString(), ...coordinate });
+      await createIncident({ title: title.trim(), description: description.trim(), category, registeredAt: registeredAt.toISOString(), normalizedAddress, ...coordinate });
       setTitle(''); setDescription(''); setCategory(null); setRegisteredAt(new Date()); setSuccess(true);
       return true;
     } catch (e) { setError(e instanceof Error ? e.message : 'No se ha podido enviar la incidencia.'); return false; }

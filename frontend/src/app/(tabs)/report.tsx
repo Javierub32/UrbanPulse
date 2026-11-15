@@ -308,11 +308,26 @@ export default function ReportScreen() {
                 onSelect={location.selectCoordinate}
               />
               {location.coordinate ? (
-                <ThemedText selectable type="small" themeColor="textSecondary">
-                  Ubicación seleccionada:{" "}
-                  {location.coordinate.latitude.toFixed(5)},{" "}
-                  {location.coordinate.longitude.toFixed(5)}
-                </ThemedText>
+                <View style={{ gap: Spacing.one }}>
+                  <ThemedText selectable type="small" themeColor="textSecondary">
+                    Ubicación seleccionada:{" "}
+                    {location.coordinate.latitude.toFixed(5)},{" "}
+                    {location.coordinate.longitude.toFixed(5)}
+                  </ThemedText>
+                  {location.streetStatus === "loading" && (
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Buscando la calle…
+                    </ThemedText>
+                  )}
+                  {location.street && (
+                    <ThemedText type="small">Calle: {location.street}</ThemedText>
+                  )}
+                  {location.streetStatus === "unavailable" && (
+                    <ThemedText type="small" themeColor="textSecondary">
+                      No se ha podido determinar la calle; se guardarán las coordenadas.
+                    </ThemedText>
+                  )}
+                </View>
               ) : (
                 <ThemedText type="small" themeColor="textSecondary">
                   Todavía no has seleccionado una ubicación.
@@ -355,6 +370,7 @@ export default function ReportScreen() {
           if (
             await form.submit(
               location.mode === "assets" ? null : location.coordinate,
+              location.mode === "current" ? location.street : null,
             )
           )
             location.reset();
