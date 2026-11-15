@@ -74,6 +74,56 @@ La respuesta debe tener estado HTTP `200` y mostrar `"status":"UP"`. Esta compro
 
 También puedes abrir [Swagger UI](http://localhost:8080/swagger-ui.html) para consultar los endpoints. La descripción OpenAPI está en [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs).
 
+## Usar la app Android en desarrollo
+
+Necesitas tener instalada en el dispositivo la APK de desarrollo de UrbanPulse y conectar el ordenador y el móvil a la misma red Wi-Fi. La APK de desarrollo carga el código JavaScript desde Metro; no es una versión de producción.
+
+Si todavía no tienes la APK, desde `frontend/` puedes generar una con el perfil `development` de EAS:
+
+```bash
+pnpm dlx eas-cli build --platform android --profile development
+```
+
+Inicia sesión en EAS si lo solicita, espera a que termine la compilación y descarga e instala el archivo APK en Android.
+
+### 1. Arrancar el backend
+
+Desde la raíz del repositorio, inicia la API y la base de datos siguiendo los pasos anteriores:
+
+```bash
+docker compose --profile container up --build -d
+```
+
+Comprueba que la API responde en `http://localhost:8080/actuator/health`.
+
+### 2. Configurar la dirección de la API para el móvil
+
+Configura `EXPO_PUBLIC_API_URL` con la dirección IPv4 local del ordenador y el puerto `8080` en el archivo .env:
+
+```dotenv
+EXPO_PUBLIC_API_URL=http://<IP_LOCAL_DEL_ORDENADOR>:8080
+```
+
+En Windows puedes encontrar la IPv4 con `ipconfig`. Por ejemplo, si aparece `192.168.0.114`, usa `http://192.168.0.114:8080`. No uses `localhost`: en el móvil, `localhost` apunta al propio móvil, no al ordenador.
+
+Si el móvil no puede conectar, permite conexiones entrantes desde la red local a los puertos `8080` (API) y `8081` (Metro) en el firewall del ordenador. En Windows, abre PowerShell como administrador y ejecuta:
+
+```powershell
+New-NetFirewallRule -DisplayName "UrbanPulse desarrollo" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8080,8081 -RemoteAddress LocalSubnet -Profile Any
+```
+
+### 3. Arrancar Metro y abrir la app
+
+Desde `frontend/`, inicia Expo con el perfil de development client:
+
+```bash
+pnpm exec expo start --dev-client --lan
+```
+
+Abre la APK de desarrollo en Android y selecciona el proyecto detectado o escanea el QR de la terminal desde el development launcher. Si el launcher no muestra el proyecto, puedes introducir manualmente la URL de Metro que aparece en la terminal. Si Expo no muestra una dirección de la red local, el móvil no podrá alcanzar Metro.
+
+Para cargar los últimos cambios, abre el menú de desarrollo de la app y pulsa **Reload**. La terminal debe mostrar `Android Bundled` cuando Metro envía el bundle al dispositivo. Si cambias `EXPO_PUBLIC_API_URL`, reinicia Metro para que lea el nuevo valor.
+
 ## Arrancar el backend con Maven
 
 Si vas a trabajar en el código Java, puedes ejecutar la API en tu máquina y dejar PostGIS en Docker. Para esta opción necesitas un JDK 17. Maven se descarga con el wrapper incluido en el proyecto.
