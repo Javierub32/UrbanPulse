@@ -2,6 +2,7 @@ package com.leftjoiner.urbanpulse.urbanpulse.service;
 
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentRequest;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentDetailResponse;
+import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentAtmosphericDataResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentHistoryResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentListItemResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentPageResponse;
@@ -12,8 +13,10 @@ import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
 import com.leftjoiner.urbanpulse.urbanpulse.exception.IncidentNotFoundException;
 import com.leftjoiner.urbanpulse.urbanpulse.exception.InvalidPaginationException;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.IncidentMapper;
+import com.leftjoiner.urbanpulse.urbanpulse.mapper.AtmosphericContextMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.StatusChangeMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.IncidentRepository;
+import com.leftjoiner.urbanpulse.urbanpulse.repository.UrbanContextRepository;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.StatusChangeRepository;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
 import java.time.LocalDateTime;
@@ -39,6 +42,9 @@ public class IncidentService {
     private final IncidentMapper incidentMapper;
     private final StatusChangeRepository statusChangeRepository;
     private final StatusChangeMapper statusChangeMapper;
+    private final AtmosphericIncidentEnrichmentService atmosphericIncidentEnrichmentService;
+    private final UrbanContextRepository urbanContextRepository;
+    private final AtmosphericContextMapper atmosphericContextMapper;
 
     private static final int MAX_PAGE_SIZE = 100;
 
@@ -51,9 +57,13 @@ public class IncidentService {
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         incident.setUser(user);
         incident.setStatus(IncidentStatus.REPORTED);
-        incident.setRegisteredAt(now);
+        if (incident.getRegisteredAt() == null) {
+            incident.setRegisteredAt(now);
+        }
         incident.setUpdatedAt(now);
-        return incidentMapper.toDTO(incidentRepository.save(incident));
+        IncidentEntity savedIncident = incidentRepository.save(incident);
+        atmosphericIncidentEnrichmentService.enrich(savedIncident);
+        return incidentMapper.toDTO(savedIncident);
     }
 
     @Transactional(readOnly = true)
@@ -95,7 +105,13 @@ public class IncidentService {
                 .stream()
                 .map(statusChangeMapper::toDTO)
                 .toList();
-        return new IncidentDetailResponse(response, history);
+        List<IncidentAtmosphericDataResponse> atmosphericData = urbanContextRepository
+                .findAllByIncident_IdAndKeyInOrderByKeyAsc(incidentId,
+                        List.of("precipitation", "pm2_5", "pm10", "nitrogen_dioxide"))
+                .stream()
+                .map(atmosphericContextMapper::toDTO)
+                .toList();
+        return new IncidentDetailResponse(response, history, atmosphericData);
     }
 
     @Transactional(readOnly = true)

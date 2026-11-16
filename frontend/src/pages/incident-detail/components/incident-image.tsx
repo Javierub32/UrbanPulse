@@ -21,7 +21,7 @@ function IncidentImageContent({ uri }: { uri?: string | null }) {
     {hasImage ? <Image source={{ uri: uri! }} contentFit="cover" accessibilityLabel="Imagen de la incidencia" onError={() => setFailed(true)} style={{ width: '100%', height: '100%' }} /> :
       <View accessibilityLabel="Sin imagen" style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two }}>
         <View style={{ width: 60, height: 60, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSelected }}>
-          <Svg width={30} height={30} viewBox="0 0 32 32" fill="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <Svg width={30} height={30} viewBox="0 0 32 32" fill="none">
             <Rect x={4} y={6} width={24} height={20} rx={4} stroke={theme.accent} strokeWidth={1.8} />
             <Circle cx={21} cy={12} r={2} fill={theme.accent} />
             <Path d="M6 23l6.5-7 4.5 4 3-2.5 6 5.5" stroke={theme.accent} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />

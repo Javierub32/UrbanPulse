@@ -14,6 +14,7 @@ import { getIncidentDetail } from './services/incident-detail-service';
 type State = { status: 'loading' } | { status: 'error'; message: string; retry: boolean } | { status: 'success'; data: IncidentDetail };
 const statuses: Record<string, string> = { REPORTED: 'Comunicada', VALIDATED: 'Validada', REJECTED: 'Rechazada', ASSIGNED: 'Asignada', IN_PROGRESS: 'En curso', RESOLVED: 'Resuelta', REOPENED: 'Reabierta', CLOSED: 'Cerrada' };
 const priorities: Record<string, string> = { LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta', CRITICAL: 'Crítica' };
+const atmosphericLabels: Record<string, string> = { precipitation: 'Precipitación', pm2_5: 'Partículas PM2.5', pm10: 'Partículas PM10', nitrogen_dioxide: 'Dióxido de nitrógeno' };
 const label = (value: string | null, labels: Record<string, string>) => value ? (labels[value] ?? value) : 'No disponible';
 const date = (value: string | null) => {
   if (!value) return 'No disponible';
@@ -56,7 +57,7 @@ function IncidentDetailContent({ id }: { id: string }) {
     return () => { active = false; controller.abort(); };
   }, [id, attempt]);
 
-  const field = (name: string, value: string) => <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: Spacing.two, paddingVertical: Spacing.two, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }}><ThemedText type="small" themeColor="textSecondary">{name}</ThemedText><ThemedText type="smallBold" selectable style={{ flexShrink: 1, textAlign: 'right' }}>{value}</ThemedText></View>;
+  const field = (name: string, value: string, key?: string) => <View key={key} style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: Spacing.two, paddingVertical: Spacing.two, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }}><ThemedText type="small" themeColor="textSecondary">{name}</ThemedText><ThemedText type="smallBold" selectable style={{ flexShrink: 1, textAlign: 'right' }}>{value}</ThemedText></View>;
   return <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: theme.background }} contentContainerStyle={{ padding: Spacing.four, gap: Spacing.four }}>
     {state.status === 'loading' && <View accessibilityRole="progressbar" accessibilityLabel="Cargando incidencia"><ActivityIndicator /><ThemedText>Cargando incidencia…</ThemedText></View>}
     {state.status === 'error' && <View style={{ gap: Spacing.two }}><ThemedText selectable accessibilityRole="alert">{state.message}</ThemedText>{state.retry && <Pressable accessibilityRole="button" onPress={retry} style={{ minHeight: 44, justifyContent: 'center' }}><ThemedText type="linkPrimary">Reintentar</ThemedText></Pressable>}</View>}
@@ -70,9 +71,25 @@ function IncidentDetailContent({ id }: { id: string }) {
       <View style={{ gap: Spacing.two }}><ThemedText type="smallBold">Descripción</ThemedText><ThemedText selectable>{state.data.description || 'No disponible'}</ThemedText></View>
       <View style={{ gap: Spacing.two }}><ThemedText type="smallBold">Información</ThemedText>
         {field('Prioridad', label(state.data.priority, priorities))}
-        {field('Registrada', date(state.data.registeredAt))}
+        {field('Fecha y hora de la incidencia', date(state.data.registeredAt))}
         {field('Actualizada', date(state.data.updatedAt))}
         {field('Ubicación', state.data.latitude != null && state.data.longitude != null ? `${state.data.latitude}, ${state.data.longitude}` : 'No disponible')}
+      </View>
+      <View style={{ gap: Spacing.two }}><ThemedText type="smallBold">Datos atmosféricos</ThemedText>
+        {(state.data.atmosphericData ?? []).length === 0
+          ? <ThemedText themeColor="textSecondary">No hay datos atmosféricos disponibles para esta incidencia.</ThemedText>
+          : <>
+              {state.data.atmosphericData.map((reading, index) => field(
+                atmosphericLabels[reading.key] ?? reading.key,
+                `${reading.value} ${reading.unit}`,
+                `${reading.key}-${reading.source}-${index}`,
+              ))}
+              <ThemedText type="small" themeColor="textSecondary" style={{ fontSize: 11, lineHeight: 14, textAlign: 'right' }}>
+                {state.data.atmosphericData.some(reading => reading.source.includes('CAMS ENSEMBLE'))
+                  ? 'Fuente: Open-Meteo · Calidad del aire: CAMS ENSEMBLE'
+                  : 'Fuente: Open-Meteo'}
+              </ThemedText>
+            </>}
       </View>
       <View style={{ gap: Spacing.three }}><ThemedText type="smallBold">Historial</ThemedText>
         {state.data.history.length === 0 ? <ThemedText themeColor="textSecondary">No hay cambios de estado registrados.</ThemedText> : state.data.history.map((entry, index) => <View key={`${entry.changedAt}-${index}`} style={{ flexDirection: 'row', gap: Spacing.three }}><View style={{ width: 10, height: 10, borderRadius: 5, marginTop: 7, backgroundColor: theme.accent }} /><View style={{ flex: 1, gap: Spacing.one }}><ThemedText>{entry.previousStatus ? `${label(entry.previousStatus, statuses)} → ` : ''}{label(entry.status, statuses)}</ThemedText><ThemedText type="small" themeColor="textSecondary">{date(entry.changedAt)}</ThemedText></View></View>)}

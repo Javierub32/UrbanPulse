@@ -21,8 +21,10 @@ public class IncidentDetailResponse {
     private final LocalDateTime registeredAt;
     private final LocalDateTime updatedAt;
     private final List<IncidentHistoryResponse> history;
+    private final List<IncidentAtmosphericDataResponse> atmosphericData;
 
-    public IncidentDetailResponse(IncidentResponse incident, List<IncidentHistoryResponse> history) {
+    public IncidentDetailResponse(IncidentResponse incident, List<IncidentHistoryResponse> history,
+            List<IncidentAtmosphericDataResponse> atmosphericData) {
         this.id = incident.getId();
         this.title = incident.getTitle();
         this.description = incident.getDescription();
@@ -34,5 +36,6 @@ public class IncidentDetailResponse {
         this.registeredAt = incident.getRegisteredAt();
         this.updatedAt = incident.getUpdatedAt();
         this.history = List.copyOf(history);
+        this.atmosphericData = List.copyOf(atmosphericData);
     }
 }
