@@ -41,6 +41,11 @@ export default function ReportScreen() {
     }).start();
   }, [location.mode, position]);
   const itemWidth = barWidth / options.length;
+  const isLocationResolving = location.status === "loading" || location.streetStatus === "loading";
+  const needsLocationSelection = location.mode === "assets"
+    || !location.coordinate
+    || (location.mode === "current" && location.status !== "idle");
+  const isSubmitDisabled = form.busy || isLocationResolving || needsLocationSelection;
 
   return (
     <ScrollView
@@ -300,19 +305,33 @@ export default function ReportScreen() {
                 </View>
               )}
               <ThemedText themeColor="textSecondary" type="small">
-                Toca el mapa para marcar el lugar o arrastra el marcador para
-                ajustarlo.
+                Toca el mapa para marcar o ajustar la ubicación.
               </ThemedText>
               <LocationMap
                 coordinate={location.coordinate}
                 onSelect={location.selectCoordinate}
               />
               {location.coordinate ? (
-                <ThemedText selectable type="small" themeColor="textSecondary">
-                  Ubicación seleccionada:{" "}
-                  {location.coordinate.latitude.toFixed(5)},{" "}
-                  {location.coordinate.longitude.toFixed(5)}
-                </ThemedText>
+                <View style={{ gap: Spacing.one }}>
+                  <ThemedText selectable type="small" themeColor="textSecondary">
+                    Ubicación seleccionada:{" "}
+                    {location.coordinate.latitude.toFixed(5)},{" "}
+                    {location.coordinate.longitude.toFixed(5)}
+                  </ThemedText>
+                  {location.streetStatus === "loading" && (
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Buscando la calle…
+                    </ThemedText>
+                  )}
+                  {location.street && (
+                    <ThemedText type="small">Calle: {location.street}</ThemedText>
+                  )}
+                  {location.streetStatus === "unavailable" && (
+                    <ThemedText type="small" themeColor="textSecondary">
+                      No se ha podido determinar la calle; se guardarán las coordenadas.
+                    </ThemedText>
+                  )}
+                </View>
               ) : (
                 <ThemedText type="small" themeColor="textSecondary">
                   Todavía no has seleccionado una ubicación.
@@ -348,13 +367,16 @@ export default function ReportScreen() {
       ) : null}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Enviar incidencia"
-        accessibilityState={{ disabled: form.busy, busy: form.busy }}
-        disabled={form.busy}
+        accessibilityLabel={isLocationResolving
+          ? "Esperando a determinar la ubicación y la calle"
+          : needsLocationSelection ? "Selecciona una ubicación para continuar" : "Enviar incidencia"}
+        accessibilityState={{ disabled: isSubmitDisabled, busy: form.busy || isLocationResolving }}
+        disabled={isSubmitDisabled}
         onPress={async () => {
           if (
             await form.submit(
               location.mode === "assets" ? null : location.coordinate,
+              location.mode === "assets" ? null : location.street,
             )
           )
             location.reset();
@@ -364,11 +386,23 @@ export default function ReportScreen() {
           padding: Spacing.three,
           borderRadius: 12,
           alignItems: "center",
-          opacity: form.busy || pressed ? 0.65 : 1,
+          gap: Spacing.two,
+          opacity: isSubmitDisabled || pressed ? 0.65 : 1,
         })}
       >
         {form.busy ? (
           <ActivityIndicator color="#fff" />
+        ) : isLocationResolving ? (
+          <>
+            <ActivityIndicator color="#fff" />
+            <ThemedText type="smallBold" style={{ color: "#fff" }}>
+              Esperando la ubicación y la calle…
+            </ThemedText>
+          </>
+        ) : needsLocationSelection ? (
+          <ThemedText type="smallBold" style={{ color: "#fff" }}>
+            Selecciona una ubicación para continuar
+          </ThemedText>
         ) : (
           <ThemedText type="smallBold" style={{ color: "#fff" }}>
             Enviar incidencia

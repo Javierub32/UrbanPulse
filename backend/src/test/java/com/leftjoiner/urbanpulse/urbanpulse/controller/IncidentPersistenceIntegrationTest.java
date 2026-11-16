@@ -252,7 +252,8 @@ class IncidentPersistenceIntegrationTest {
         String body = mockMvc.perform(post("/api/incidents/create").header("Authorization", "Bearer " + jwtService.issue(user.getId(), user.getRole())).contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"title":"Farola","description":"Apagada",
-                     "category":"STREET_LIGHTING","latitude":40.4,"longitude":-3.7}
+                     "category":"STREET_LIGHTING","latitude":40.4,"longitude":-3.7,
+                     "normalizedAddress":"Calle Prueba 1"}
                     """))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         UUID id = UUID.fromString(JsonMapper.builder().build().readTree(body).path("id").asString());
@@ -260,6 +261,7 @@ class IncidentPersistenceIntegrationTest {
         assertEquals(IncidentStatus.REPORTED, saved.getStatus());
         assertNull(saved.getPriority());
         assertEquals(user.getId(), saved.getUser().getId());
+        assertEquals("Calle Prueba 1", saved.getNormalizedAddress());
         Point point = (Point) saved.getLocation();
         assertEquals(4326, point.getSRID());
         assertEquals(-3.7, point.getX());
@@ -289,5 +291,32 @@ class IncidentPersistenceIntegrationTest {
             }
         }
         assertTrue(found, "La incidencia creada debe aparecer en el listado público");
+    }
+
+    @Test
+    void createsIncidentWithoutStreetAndKeepsCoordinates() throws Exception {
+        when(openMeteoClient.fetchPrecipitation(anyDouble(), anyDouble(), any(Instant.class)))
+                .thenThrow(new OpenMeteoException("Weather service unavailable."));
+        when(openMeteoClient.fetchAirQuality(anyDouble(), anyDouble(), any(Instant.class)))
+                .thenThrow(new OpenMeteoException("Air quality service unavailable."));
+        UserEntity user = createUser(UserRole.CITIZEN);
+        String token = jwtService.issue(user.getId(), user.getRole());
+
+        String body = mockMvc.perform(post("/api/incidents/create")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {"title":"Farola","description":"Apagada",
+                             "category":"STREET_LIGHTING","latitude":40.4,"longitude":-3.7}
+                            """))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        UUID id = UUID.fromString(JsonMapper.builder().build().readTree(body).path("id").asString());
+        var saved = incidents.findById(id).orElseThrow();
+        assertNull(saved.getNormalizedAddress());
+        Point point = (Point) saved.getLocation();
+        assertEquals(-3.7, point.getX());
+        assertEquals(40.4, point.getY());
     }
 }

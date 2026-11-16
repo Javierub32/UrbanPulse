@@ -111,7 +111,7 @@ public class IncidentService {
                 .stream()
                 .map(atmosphericContextMapper::toDTO)
                 .toList();
-        return new IncidentDetailResponse(response, history, atmosphericData);
+        return new IncidentDetailResponse(response, history, atmosphericData, incident.getNormalizedAddress());
     }
 
     @Transactional(readOnly = true)

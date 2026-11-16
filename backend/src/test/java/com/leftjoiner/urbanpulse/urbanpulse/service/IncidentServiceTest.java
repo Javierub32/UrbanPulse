@@ -47,7 +47,8 @@ class IncidentServiceTest {
         var mapper = new IncidentMapper();
         var service = new IncidentService(incidents, users, mapper,
                 mock(StatusChangeRepository.class), mock(StatusChangeMapper.class),
-                mock(AtmosphericIncidentEnrichmentService.class), mock(UrbanContextRepository.class),
+                mock(AtmosphericIncidentEnrichmentService.class),
+                mock(UrbanContextRepository.class),
                 new AtmosphericContextMapper());
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
@@ -67,6 +68,8 @@ class IncidentServiceTest {
         assertEquals(4326, point.getSRID());
         assertEquals(-3.7, point.getX());
         assertEquals(40.4, point.getY());
+
+        verify(incidents).save(any());
     }
 
     @Test
