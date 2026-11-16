@@ -16,11 +16,14 @@ const statuses: Record<string, string> = { REPORTED: 'Comunicada', VALIDATED: 'V
 const priorities: Record<string, string> = { LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta', CRITICAL: 'Crítica' };
 const atmosphericLabels: Record<string, string> = { precipitation: 'Precipitación', pm2_5: 'Partículas PM2.5', pm10: 'Partículas PM10', nitrogen_dioxide: 'Dióxido de nitrógeno' };
 const label = (value: string | null, labels: Record<string, string>) => value ? (labels[value] ?? value) : 'No disponible';
-const date = (value: string | null) => {
-  if (!value) return 'No disponible';
+const parseDate = (value: string | null) => {
+  if (!value) return null;
   const parsed = new Date(value.endsWith('Z') || /[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`);
-  return Number.isNaN(parsed.getTime()) ? 'No disponible' : parsed.toLocaleString('es-ES');
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
+const date = (value: string | null) => parseDate(value)?.toLocaleString('es-ES') ?? 'No disponible';
+const incidentDate = (value: string | null) => parseDate(value)?.toLocaleDateString('es-ES') ?? 'No disponible';
+const incidentTime = (value: string | null) => parseDate(value)?.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) ?? 'No disponible';
 
 export default function IncidentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -71,7 +74,8 @@ function IncidentDetailContent({ id }: { id: string }) {
       <View style={{ gap: Spacing.two }}><ThemedText type="smallBold">Descripción</ThemedText><ThemedText selectable>{state.data.description || 'No disponible'}</ThemedText></View>
       <View style={{ gap: Spacing.two }}><ThemedText type="smallBold">Información</ThemedText>
         {field('Prioridad', label(state.data.priority, priorities))}
-        {field('Fecha y hora de la incidencia', date(state.data.registeredAt))}
+        {field('Fecha de la incidencia', incidentDate(state.data.registeredAt))}
+        {field('Hora de la incidencia', incidentTime(state.data.registeredAt))}
         {field('Actualizada', date(state.data.updatedAt))}
         {field('Calle', state.data.normalizedAddress || 'No disponible')}
         {field('Coordenadas', state.data.latitude != null && state.data.longitude != null ? `${state.data.latitude}, ${state.data.longitude}` : 'No disponible')}

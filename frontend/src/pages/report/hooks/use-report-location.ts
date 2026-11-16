@@ -30,6 +30,7 @@ export function useReportLocation() {
 
   async function locate() {
     const id = ++requestId.current;
+    setCoordinate(null);
     setStatus('loading');
     setStreet(null);
     setStreetStatus('idle');
