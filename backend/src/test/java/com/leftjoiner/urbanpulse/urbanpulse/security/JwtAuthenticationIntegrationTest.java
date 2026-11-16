@@ -127,25 +127,35 @@ class JwtAuthenticationIntegrationTest {
     }
 
     @Test
-    void roleChangesRequireANewTokenAndDeniedRolesReceive403() throws Exception {
+    void roleChangesImmediatelyInvalidateOldTokenAndDeniedRolesReceive403() throws Exception {
         UserEntity user = user(UserRole.CITIZEN);
         String token = token(user);
         user.setRole(UserRole.OPERATOR);
         users.saveAndFlush(user);
 
         var me = me(token);
-        assertEquals(200, me.statusCode());
-        assertEquals("CITIZEN", json.readTree(me.body()).path("role").asString());
+        assertUnauthenticated(me);
         org.mockito.Mockito.clearInvocations(users);
         var oldTokenRequest = send(request("/api/incidents/create").header("Authorization", "Bearer " + token)
                 .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString("{}")));
-        assertEquals(400, oldTokenRequest.statusCode());
-        org.mockito.Mockito.verifyNoInteractions(users);
+        assertUnauthenticated(oldTokenRequest);
+        org.mockito.Mockito.verify(users).findById(user.getId());
         token = token(user);
         var denied = send(request("/api/incidents/create").header("Authorization", "Bearer " + token)
                 .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString("{}")));
         assertEquals(403, denied.statusCode());
         assertEquals("ACCESS_DENIED", json.readTree(denied.body()).path("code").asString());
+    }
+
+    @Test
+    void revokedOperatorTokenCannotReadAnIncidentAfterRoleReduction() throws Exception {
+        UserEntity operator = user(UserRole.OPERATOR);
+        String token = token(operator);
+        operator.setRole(UserRole.CITIZEN);
+        users.saveAndFlush(operator);
+        var response = send(request("/api/incidents/" + UUID.randomUUID())
+                .header("Authorization", "Bearer " + token).GET());
+        assertUnauthenticated(response);
     }
 
     @Test

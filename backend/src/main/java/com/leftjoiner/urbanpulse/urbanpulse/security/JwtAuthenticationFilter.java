@@ -15,11 +15,13 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
+import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
 
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final SecurityProblemHandler problemHandler;
+    private final UserRepository userRepository;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -44,6 +46,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     throw new BadCredentialsException("Credencial no válida.");
                 }
                 UrbanPulsePrincipal principal = jwtService.validate(token);
+                boolean currentAccount = userRepository.findById(principal.getId())
+                        .filter(user -> Boolean.TRUE.equals(user.getActive()) && user.getRole() == principal.getRole())
+                        .isPresent();
+                if (!currentAccount) throw new BadCredentialsException("Credencial no válida.");
                 var authentication = UsernamePasswordAuthenticationToken.authenticated(
                         principal, null, List.of(new SimpleGrantedAuthority("ROLE_" + principal.getRole().name())));
                 var context = SecurityContextHolder.createEmptyContext();

@@ -38,7 +38,7 @@ export default function ExploreScreen() {
       if (category) params.set('category', category);
       if (status) params.set('status', status);
       if (since) params.set('since', since);
-      apiRequest<MapItem[]>(`/api/incidents/map-members?${params}`, { signal: controller.signal }, false)
+      apiRequest<MapItem[]>(`/api/incidents/map-members?${params}`, { signal: controller.signal })
         .then(data => { if (!controller.signal.aborted) setMembers({ status: 'success', data }); })
         .catch(() => { if (!controller.signal.aborted) setMembers({ status: 'error', data: [] }); });
     }, 0);
@@ -55,7 +55,7 @@ export default function ExploreScreen() {
       if (category) params.set('category', category);
       if (status) params.set('status', status);
       if (since) params.set('since', since);
-      apiRequest<MapItem[]>(`/api/incidents/map?${params}`, { signal: controller.signal }, false)
+      apiRequest<MapItem[]>(`/api/incidents/map?${params}`, { signal: controller.signal })
         .then(data => { if (!controller.signal.aborted) setIncidents({ status: 'success', data }); })
         .catch(error => { if (!controller.signal.aborted) setIncidents({ status: 'error', data: [], message: error.message }); });
     }, 250);

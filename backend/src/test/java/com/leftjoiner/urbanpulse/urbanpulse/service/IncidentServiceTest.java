@@ -6,14 +6,21 @@ import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
 import org.springframework.security.authentication.BadCredentialsException;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.IncidentMapper;
+import com.leftjoiner.urbanpulse.urbanpulse.mapper.AtmosphericContextMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.mapper.StatusChangeMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.IncidentRepository;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.StatusChangeRepository;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
+import com.leftjoiner.urbanpulse.urbanpulse.repository.UrbanContextRepository;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Point;
+import com.leftjoiner.urbanpulse.urbanpulse.security.UrbanPulsePrincipal;
+import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -23,11 +30,13 @@ class IncidentServiceTest {
     void detailDoesNotLoadHistoryWhenNotFound() {
         var incidents = mock(IncidentRepository.class);
         var history = mock(StatusChangeRepository.class);
-        var service = new IncidentService(incidents, mock(UserRepository.class), new IncidentMapper(), history, mock(StatusChangeMapper.class));
+        var service = new IncidentService(incidents, mock(UserRepository.class), new IncidentMapper(), history,
+                mock(StatusChangeMapper.class), mock(AtmosphericIncidentEnrichmentService.class),
+                mock(UrbanContextRepository.class), new AtmosphericContextMapper());
         UUID incidentId = UUID.randomUUID();
         when(incidents.findById(incidentId)).thenReturn(Optional.empty());
         assertThrows(com.leftjoiner.urbanpulse.urbanpulse.exception.IncidentNotFoundException.class,
-                () -> service.getIncidentDetail(incidentId));
+                () -> service.getIncidentDetail(incidentId, new UrbanPulsePrincipal(UUID.randomUUID(), UserRole.OPERATOR)));
         verify(incidents).findById(incidentId);
         verifyNoInteractions(history);
     }
@@ -37,7 +46,10 @@ class IncidentServiceTest {
         var users = mock(UserRepository.class);
         var mapper = new IncidentMapper();
         var service = new IncidentService(incidents, users, mapper,
-                mock(StatusChangeRepository.class), mock(StatusChangeMapper.class));
+                mock(StatusChangeRepository.class), mock(StatusChangeMapper.class),
+                mock(AtmosphericIncidentEnrichmentService.class),
+                mock(UrbanContextRepository.class),
+                new AtmosphericContextMapper());
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
         user.setActive(true);
@@ -56,6 +68,31 @@ class IncidentServiceTest {
         assertEquals(4326, point.getSRID());
         assertEquals(-3.7, point.getX());
         assertEquals(40.4, point.getY());
+
+        verify(incidents).save(any());
+    }
+
+    @Test
+    void usesSelectedRegistrationTimeAndKeepsUpdateTimeCurrent() {
+        var incidents = mock(IncidentRepository.class);
+        var users = mock(UserRepository.class);
+        var service = new IncidentService(incidents, users, new IncidentMapper(),
+                mock(StatusChangeRepository.class), mock(StatusChangeMapper.class),
+                mock(AtmosphericIncidentEnrichmentService.class), mock(UrbanContextRepository.class),
+                new AtmosphericContextMapper());
+        UserEntity user = new UserEntity();
+        user.setId(UUID.randomUUID());
+        user.setActive(true);
+        when(users.findById(user.getId())).thenReturn(Optional.of(user));
+        when(incidents.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        Instant selected = Instant.parse("2026-11-13T15:20:00Z");
+        IncidentRequest request = request();
+        request.setRegisteredAt(selected);
+
+        var response = service.create(request, user.getId());
+
+        assertEquals(LocalDateTime.ofInstant(selected, ZoneOffset.UTC), response.getRegisteredAt());
+        assertNotNull(response.getUpdatedAt());
     }
 
     @Test
@@ -64,7 +101,9 @@ class IncidentServiceTest {
         var users = mock(UserRepository.class);
         var mapper = new IncidentMapper();
         var service = new IncidentService(incidents, users, mapper,
-                mock(StatusChangeRepository.class), mock(StatusChangeMapper.class));
+                mock(StatusChangeRepository.class), mock(StatusChangeMapper.class),
+                mock(AtmosphericIncidentEnrichmentService.class), mock(UrbanContextRepository.class),
+                new AtmosphericContextMapper());
         IncidentRequest request = request();
         UUID id = UUID.randomUUID();
         when(users.findById(id)).thenReturn(Optional.empty());
@@ -77,7 +116,9 @@ class IncidentServiceTest {
         var incidents = mock(IncidentRepository.class);
         var users = mock(UserRepository.class);
         var service = new IncidentService(incidents, users, new IncidentMapper(),
-                mock(StatusChangeRepository.class), mock(StatusChangeMapper.class));
+                mock(StatusChangeRepository.class), mock(StatusChangeMapper.class),
+                mock(AtmosphericIncidentEnrichmentService.class), mock(UrbanContextRepository.class),
+                new AtmosphericContextMapper());
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
         when(users.findById(user.getId())).thenReturn(Optional.of(user));

@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.leftjoiner.urbanpulse.urbanpulse.security.UrbanPulsePrincipal;
 
 @Service
 @RequiredArgsConstructor
@@ -17,7 +18,7 @@ public class IncidentMapService {
 
     @Transactional(readOnly = true)
     public List<IncidentMapItem> find(double west, double south, double east, double north, double zoom,
-            IncidentCategory category, IncidentStatus status, java.time.Instant since) {
+            IncidentCategory category, IncidentStatus status, java.time.Instant since, UrbanPulsePrincipal principal) {
         if (!Double.isFinite(west) || !Double.isFinite(east) || !Double.isFinite(south) || !Double.isFinite(north)
                 || !Double.isFinite(zoom) || west < -180 || east > 180 || west >= east
                 || south < -85 || north > 85 || south >= north || zoom < 0 || zoom > 22) {
@@ -25,6 +26,7 @@ public class IncidentMapService {
         }
         var params = new MapSqlParameterSource().addValue("west", west).addValue("south", south)
                 .addValue("east", east).addValue("north", north)
+                .addValue("accessRole", principal.getRole().name()).addValue("viewerId", principal.getId())
                 .addValue("category", category == null ? null : category.name())
                 .addValue("status", status == null ? null : status.name())
                 .addValue("since", since == null ? null : java.time.LocalDateTime.ofInstant(since, java.time.ZoneOffset.UTC));
@@ -36,6 +38,9 @@ public class IncidentMapService {
                      ST_X("location") AS x, ST_Y("location") AS y
               FROM "Incident"
               WHERE "location" && ST_MakeEnvelope(:west, :south, :east, :north, 4326)
+                AND (:accessRole = 'OPERATOR' OR (:accessRole = 'CITIZEN' AND "userId" = :viewerId)
+                  OR (:accessRole = 'TECHNICIAN' AND EXISTS (SELECT 1 FROM "Assignment" a
+                    WHERE a."incidentId" = "Incident"."id" AND a."technicianId" = :viewerId)))
                 AND ST_Intersects("location", ST_MakeEnvelope(:west, :south, :east, :north, 4326))
                 AND (CAST(:category AS text) IS NULL OR "category"::text = :category)
                 AND (CAST(:status AS text) IS NULL OR "status"::text = :status)
@@ -87,12 +92,13 @@ public class IncidentMapService {
     }
     @Transactional(readOnly = true)
     public List<IncidentMapItem> members(double west, double south, double east, double north,
-            IncidentCategory category, IncidentStatus status, int page, java.time.Instant since) {
+            IncidentCategory category, IncidentStatus status, int page, java.time.Instant since, UrbanPulsePrincipal principal) {
         if (!Double.isFinite(west) || !Double.isFinite(east) || !Double.isFinite(south) || !Double.isFinite(north)
                 || west < -180 || east > 180 || west > east || south < -85 || north > 85 || south > north
                 || page < 0 || page > 100000) throw new IllegalArgumentException("Área o página no válida");
         var params = new MapSqlParameterSource().addValue("west", west).addValue("south", south)
                 .addValue("east", east).addValue("north", north).addValue("offset", (long) page * 50)
+                .addValue("accessRole", principal.getRole().name()).addValue("viewerId", principal.getId())
                 .addValue("category", category == null ? null : category.name())
                 .addValue("status", status == null ? null : status.name())
                 .addValue("since", since == null ? null : java.time.LocalDateTime.ofInstant(since, java.time.ZoneOffset.UTC));
@@ -101,6 +107,9 @@ public class IncidentMapService {
                    ST_X("location") AS x, ST_Y("location") AS y
             FROM "Incident"
             WHERE "location" && ST_MakeEnvelope(:west - 0.00000001, :south - 0.00000001, :east + 0.00000001, :north + 0.00000001, 4326)
+              AND (:accessRole = 'OPERATOR' OR (:accessRole = 'CITIZEN' AND "userId" = :viewerId)
+                OR (:accessRole = 'TECHNICIAN' AND EXISTS (SELECT 1 FROM "Assignment" a
+                  WHERE a."incidentId" = "Incident"."id" AND a."technicianId" = :viewerId)))
               AND ST_X("location") BETWEEN :west AND :east AND ST_Y("location") BETWEEN :south AND :north
               AND (CAST(:category AS text) IS NULL OR "category"::text = :category)
               AND (CAST(:status AS text) IS NULL OR "status"::text = :status)

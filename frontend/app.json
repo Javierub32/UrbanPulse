@@ -2,6 +2,7 @@
   "expo": {
     "name": "urbanpulse",
     "slug": "urbanpulse",
+    "owner": "paaula_21",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -11,6 +12,7 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.javierub32.urbanpulse.dev",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -39,6 +41,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "67524213-6b91-400f-9bd6-cca6690a0820"
+      }
     }
   }
 }
