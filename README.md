@@ -98,7 +98,7 @@ Comprueba que la API responde en `http://localhost:8080/actuator/health`.
 
 ### 2. Configurar la dirección de la API para el móvil
 
-Configura `EXPO_PUBLIC_API_URL` con la dirección IPv4 local del ordenador y el puerto `8080` en el archivo .env:
+Configura `EXPO_PUBLIC_API_URL` con la dirección IPv4 local del ordenador y el puerto `8080` en el archivo .env.local (dentro de frontend):
 
 ```dotenv
 EXPO_PUBLIC_API_URL=http://<IP_LOCAL_DEL_ORDENADOR>:8080
