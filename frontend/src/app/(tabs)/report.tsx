@@ -41,6 +41,11 @@ export default function ReportScreen() {
     }).start();
   }, [location.mode, position]);
   const itemWidth = barWidth / options.length;
+  const isLocationResolving = location.status === "loading" || location.streetStatus === "loading";
+  const needsLocationSelection = location.mode === "assets"
+    || !location.coordinate
+    || (location.mode === "current" && location.status !== "idle");
+  const isSubmitDisabled = form.busy || isLocationResolving || needsLocationSelection;
 
   return (
     <ScrollView
@@ -362,9 +367,11 @@ export default function ReportScreen() {
       ) : null}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Enviar incidencia"
-        accessibilityState={{ disabled: form.busy, busy: form.busy }}
-        disabled={form.busy}
+        accessibilityLabel={isLocationResolving
+          ? "Esperando a determinar la ubicación y la calle"
+          : needsLocationSelection ? "Selecciona una ubicación para continuar" : "Enviar incidencia"}
+        accessibilityState={{ disabled: isSubmitDisabled, busy: form.busy || isLocationResolving }}
+        disabled={isSubmitDisabled}
         onPress={async () => {
           if (
             await form.submit(
@@ -379,11 +386,23 @@ export default function ReportScreen() {
           padding: Spacing.three,
           borderRadius: 12,
           alignItems: "center",
-          opacity: form.busy || pressed ? 0.65 : 1,
+          gap: Spacing.two,
+          opacity: isSubmitDisabled || pressed ? 0.65 : 1,
         })}
       >
         {form.busy ? (
           <ActivityIndicator color="#fff" />
+        ) : isLocationResolving ? (
+          <>
+            <ActivityIndicator color="#fff" />
+            <ThemedText type="smallBold" style={{ color: "#fff" }}>
+              Esperando la ubicación y la calle…
+            </ThemedText>
+          </>
+        ) : needsLocationSelection ? (
+          <ThemedText type="smallBold" style={{ color: "#fff" }}>
+            Selecciona una ubicación para continuar
+          </ThemedText>
         ) : (
           <ThemedText type="smallBold" style={{ color: "#fff" }}>
             Enviar incidencia
