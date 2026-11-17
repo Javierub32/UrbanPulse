@@ -55,6 +55,7 @@ public class SecurityConfig {
                                 .hasAnyRole("CITIZEN", "OPERATOR", "TECHNICIAN")
                         .requestMatchers(new RegexRequestMatcher("^/api/incidents/[0-9a-fA-F-]{36}(?:\\?.*)?$", "GET"))
                                 .hasAnyRole("CITIZEN", "OPERATOR", "TECHNICIAN")
+                        .requestMatchers("/api/operator/reviews/**", "/api/operator/reviews").hasRole("OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/incidents/create").hasRole("CITIZEN")
                         .anyRequest().denyAll())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService, problemHandler, userRepository),

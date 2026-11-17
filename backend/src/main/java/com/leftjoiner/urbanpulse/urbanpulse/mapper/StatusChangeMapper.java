@@ -11,6 +11,8 @@ public class StatusChangeMapper {
         return new IncidentHistoryResponse(
                 change.getPreviousStatus(),
                 change.getStatus(),
-                change.getChangedAt());
+                change.getChangedAt(),
+                change.getUser() == null ? null : change.getUser().getId(),
+                change.getReason(), change.getComment());
     }
 }

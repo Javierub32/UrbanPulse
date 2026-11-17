@@ -287,6 +287,49 @@ class JwtAuthenticationIntegrationTest {
         assertFalse(output.getAll().contains(malformed));
     }
 
+    @Test
+    void reviewQueueAndActionsRequireOperator() throws Exception {
+        assertEquals(401, send(request("/api/operator/reviews").GET()).statusCode());
+        for (UserRole role : List.of(UserRole.CITIZEN, UserRole.TECHNICIAN, UserRole.ADMINISTRATOR, UserRole.ANALYST)) {
+            String jwt = token(user(role));
+            assertEquals(403, send(request("/api/operator/reviews").header("Authorization", "Bearer " + jwt).GET()).statusCode());
+            assertEquals(403, send(request("/api/operator/reviews/" + UUID.randomUUID() + "/validate")
+                    .header("Authorization", "Bearer " + jwt).POST(HttpRequest.BodyPublishers.noBody())).statusCode());
+        }
+        String operator = token(user(UserRole.OPERATOR));
+        assertEquals(200, send(request("/api/operator/reviews").header("Authorization", "Bearer " + operator).GET()).statusCode());
+    }
+
+    @Test
+    void operatorReviewsReportedIncidentAndCannotEditAfterValidation() throws Exception {
+        String citizen = token(user(UserRole.CITIZEN));
+        String operator = token(user(UserRole.OPERATOR));
+        var created = send(request("/api/incidents/create").header("Authorization", "Bearer " + citizen)
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(
+                    "{\"title\":\"Farola\",\"description\":\"Apagada\",\"category\":\"STREET_LIGHTING\",\"latitude\":36.7,\"longitude\":-4.4}")));
+        assertEquals(201, created.statusCode());
+        String id = json.readTree(created.body()).path("id").asString();
+        String root = "/api/operator/reviews/" + id;
+        var emptyReason = send(request(root + "/reject").header("Authorization", "Bearer " + operator)
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString("{\"reason\":\"  \"}")));
+        assertEquals(400, emptyReason.statusCode());
+        var info = send(request(root + "/request-information").header("Authorization", "Bearer " + operator)
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString("{\"reason\":\"Foto necesaria\"}")));
+        assertEquals(200, info.statusCode());
+        assertEquals("REPORTED", incidents.findById(UUID.fromString(id)).orElseThrow().getStatus().name());
+        var validation = send(request(root + "/validate").header("Authorization", "Bearer " + operator)
+                .POST(HttpRequest.BodyPublishers.noBody()));
+        assertEquals(200, validation.statusCode());
+        var edit = send(request(root + "/edit").header("Authorization", "Bearer " + operator)
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(
+                    "{\"category\":\"TRAFFIC\",\"priority\":\"HIGH\",\"latitude\":36.7,\"longitude\":-4.4}")));
+        assertEquals(409, edit.statusCode());
+        var detail = send(request("/api/incidents/" + id).header("Authorization", "Bearer " + citizen).GET());
+        assertEquals(200, detail.statusCode());
+        assertTrue(detail.body().contains("Foto necesaria"));
+        assertEquals("VALIDATED", incidents.findById(UUID.fromString(id)).orElseThrow().getStatus().name());
+    }
+
     private UserEntity user(UserRole role) {
         UserEntity user = new UserEntity();
         user.setName("JWT test citizen");
