@@ -11,4 +11,8 @@ public class IncidentHistoryResponse {
     private IncidentStatus previousStatus;
     private IncidentStatus status;
     private LocalDateTime changedAt;
+    private java.util.UUID actorId;
+    private String reason;
+    private String action;
+    private String actorName;
 }

@@ -103,7 +103,7 @@ public class IncidentService {
         List<IncidentHistoryResponse> history = statusChangeRepository
                 .findAllByIncidentIdOrderByChangedAtAsc(incidentId)
                 .stream()
-                .map(statusChangeMapper::toDTO)
+                .map(change -> statusChangeMapper.toDTO(change, principal.getRole() == com.leftjoiner.urbanpulse.urbanpulse.entity.enums.UserRole.OPERATOR))
                 .toList();
         List<IncidentAtmosphericDataResponse> atmosphericData = urbanContextRepository
                 .findAllByIncident_IdAndKeyInOrderByKeyAsc(incidentId,

@@ -26,8 +26,8 @@ public class StatusChangeEntity {
     @JoinColumn(name = "\"incidentId\"", referencedColumnName = "\"id\"", nullable = false)
     private IncidentEntity incident;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "\"assignmentId\"", referencedColumnName = "\"id\"", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "\"assignmentId\"", referencedColumnName = "\"id\"")
     private AssignmentEntity assignment;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

@@ -1,6 +1,7 @@
 package com.leftjoiner.urbanpulse.urbanpulse.exception;
 
 import com.leftjoiner.urbanpulse.urbanpulse.controller.IncidentController;
+import com.leftjoiner.urbanpulse.urbanpulse.controller.InitialReviewController;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -8,7 +9,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @Slf4j
-@RestControllerAdvice(assignableTypes = IncidentController.class)
+@RestControllerAdvice(assignableTypes = {IncidentController.class, InitialReviewController.class})
 public class IncidentExceptionHandler extends RequestExceptionHandler {
 
     @ExceptionHandler(UserNotFoundException.class)
@@ -31,6 +32,11 @@ public class IncidentExceptionHandler extends RequestExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ProblemDetail handleInvalidMap(IllegalArgumentException exception) {
         return problem(HttpStatus.BAD_REQUEST, "Petición no válida", "Los límites o el zoom no son válidos.", "INVALID_REQUEST");
+    }
+
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ProblemDetail handleReviewError(org.springframework.web.server.ResponseStatusException exception) {
+        return ProblemDetail.forStatusAndDetail(exception.getStatusCode(), exception.getReason() == null ? "Petición no válida." : exception.getReason());
     }
 
     @ExceptionHandler(Exception.class)

@@ -10,6 +10,8 @@ import { ApiError } from '@/services/api-client';
 import type { IncidentDetail } from '@/types/incidents';
 import { IncidentImage } from './components/incident-image';
 import { getIncidentDetail } from './services/incident-detail-service';
+import { useAuth } from '@/context/AuthContext';
+import { ReviewActions } from './components/review-actions';
 
 type State = { status: 'loading' } | { status: 'error'; message: string; retry: boolean } | { status: 'success'; data: IncidentDetail };
 const statuses: Record<string, string> = { REPORTED: 'Comunicada', VALIDATED: 'Validada', REJECTED: 'Rechazada', ASSIGNED: 'Asignada', IN_PROGRESS: 'En curso', RESOLVED: 'Resuelta', REOPENED: 'Reabierta', CLOSED: 'Cerrada' };
@@ -32,6 +34,7 @@ export default function IncidentDetailScreen() {
 
 function IncidentDetailContent({ id }: { id: string }) {
   const theme = useTheme();
+  const { session } = useAuth();
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<State>({ status: 'loading' });
   const retry = useCallback(() => setAttempt(value => value + 1), []);
@@ -66,6 +69,7 @@ function IncidentDetailContent({ id }: { id: string }) {
     {state.status === 'error' && <View style={{ gap: Spacing.two }}><ThemedText selectable accessibilityRole="alert">{state.message}</ThemedText>{state.retry && <Pressable accessibilityRole="button" onPress={retry} style={{ minHeight: 44, justifyContent: 'center' }}><ThemedText type="linkPrimary">Reintentar</ThemedText></Pressable>}</View>}
     {state.status === 'success' && <View style={{ width: '100%', maxWidth: 680, alignSelf: 'center', gap: Spacing.four }}>
       <IncidentImage />
+      {session?.user.role === 'OPERATOR' && state.data.status === 'REPORTED' && <ReviewActions incident={state.data} onDone={retry} />}
       <View style={{ gap: Spacing.two }}>
         <View style={{ alignSelf: 'flex-start', backgroundColor: theme.backgroundElement, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: Spacing.one }}><ThemedText type="smallBold" style={{ color: theme.accent }}>{label(state.data.status, statuses)}</ThemedText></View>
         <ThemedText type="subtitle" selectable>{state.data.title || 'Incidencia sin título'}</ThemedText>
@@ -97,7 +101,7 @@ function IncidentDetailContent({ id }: { id: string }) {
             </>}
       </View>
       <View style={{ gap: Spacing.three }}><ThemedText type="smallBold">Historial</ThemedText>
-        {state.data.history.length === 0 ? <ThemedText themeColor="textSecondary">No hay cambios de estado registrados.</ThemedText> : state.data.history.map((entry, index) => <View key={`${entry.changedAt}-${index}`} style={{ flexDirection: 'row', gap: Spacing.three }}><View style={{ width: 10, height: 10, borderRadius: 5, marginTop: 7, backgroundColor: theme.accent }} /><View style={{ flex: 1, gap: Spacing.one }}><ThemedText>{entry.previousStatus ? `${label(entry.previousStatus, statuses)} → ` : ''}{label(entry.status, statuses)}</ThemedText><ThemedText type="small" themeColor="textSecondary">{date(entry.changedAt)}</ThemedText></View></View>)}
+        {state.data.history.length === 0 ? <ThemedText themeColor="textSecondary">No hay actividad registrada.</ThemedText> : state.data.history.map((entry, index) => <View key={`${entry.changedAt}-${index}`} style={{ flexDirection: 'row', gap: Spacing.three }}><View style={{ width: 10, height: 10, borderRadius: 5, marginTop: 7, backgroundColor: theme.accent }} /><View style={{ flex: 1, gap: Spacing.one }}><ThemedText>{entry.action === 'INCIDENT_EDITED' ? 'Información de la incidencia editada' : entry.action === 'INFORMATION_REQUESTED' ? 'Información adicional solicitada' : `${entry.previousStatus ? `${label(entry.previousStatus, statuses)} → ` : ''}${label(entry.status, statuses)}`}</ThemedText>{entry.reason && <ThemedText>{entry.action === 'INCIDENT_EDITED' ? `Campos modificados: ${entry.reason}` : entry.reason}</ThemedText>}{session?.user.role === 'OPERATOR' && (entry.actorName || entry.actorId) && <ThemedText type="small" themeColor="textSecondary">Realizado por: {entry.actorName || entry.actorId}</ThemedText>}<ThemedText type="small" themeColor="textSecondary">{date(entry.changedAt)}</ThemedText></View></View>)}
       </View>
     </View>}
   </ScrollView>;
