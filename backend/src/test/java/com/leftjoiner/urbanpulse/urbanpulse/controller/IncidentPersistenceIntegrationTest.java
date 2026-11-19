@@ -159,6 +159,60 @@ class IncidentPersistenceIntegrationTest {
     }
 
     @Test
+    void mapAndMembersShareExclusiveEndOfDateRange() throws Exception {
+        UserEntity user = createUser(UserRole.CITIZEN);
+        String token = jwtService.issue(user.getId(), user.getRole());
+        jdbc.update("""
+            INSERT INTO "Incident" ("id", "userId", "title", "category", "status", "location", "registeredAt")
+            SELECT gen_random_uuid(), ?, 'Fecha', 'WASTE', 'REPORTED', ST_SetSRID(ST_MakePoint(-6, 8), 4326), stamp
+            FROM (VALUES (TIMESTAMP '2026-01-07 00:00:00'), (TIMESTAMP '2026-01-07 23:59:59'),
+                         (TIMESTAMP '2026-01-08 00:00:00')) dates(stamp)
+            """, user.getId());
+        mockMvc.perform(get("/api/incidents/map").header("Authorization", "Bearer " + token)
+                .param("west", "-6.1").param("south", "7.9").param("east", "-5.9").param("north", "8.1").param("zoom", "15")
+                .param("since", "2026-01-07T00:00:00Z").param("until", "2026-01-08T00:00:00Z"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].count").value(2));
+        mockMvc.perform(get("/api/incidents/map-members").header("Authorization", "Bearer " + token)
+                .param("west", "-6").param("south", "8").param("east", "-6").param("north", "8")
+                .param("since", "2026-01-07T00:00:00Z").param("until", "2026-01-08T00:00:00Z"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2));
+        mockMvc.perform(get("/api/incidents/map").header("Authorization", "Bearer " + token)
+                .param("west", "-6.1").param("south", "7.9").param("east", "-5.9").param("north", "8.1").param("zoom", "15")
+                .param("since", "2026-01-08T00:00:00Z").param("until", "2026-01-07T00:00:00Z"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void statusGroupsFilterMapAndClusterMembersConsistently() throws Exception {
+        UserEntity user = createUser(UserRole.CITIZEN);
+        UserEntity other = createUser(UserRole.CITIZEN);
+        String token = jwtService.issue(user.getId(), user.getRole());
+        jdbc.update("""
+            INSERT INTO "Incident" ("id", "userId", "title", "category", "status", "location")
+            VALUES (gen_random_uuid(), ?, 'Activo', 'WASTE', 'REPORTED', ST_SetSRID(ST_MakePoint(-7, 8), 4326)),
+                   (gen_random_uuid(), ?, 'Resuelto', 'WASTE', 'RESOLVED', ST_SetSRID(ST_MakePoint(-7, 8), 4326)),
+                   (gen_random_uuid(), ?, 'Cerrado', 'WASTE', 'CLOSED', ST_SetSRID(ST_MakePoint(-7, 8), 4326)),
+                   (gen_random_uuid(), ?, 'Rechazado', 'WASTE', 'REJECTED', ST_SetSRID(ST_MakePoint(-7, 8), 4326)),
+                   (gen_random_uuid(), ?, 'Ajeno', 'WASTE', 'RESOLVED', ST_SetSRID(ST_MakePoint(-7, 8), 4326))
+            """, user.getId(), user.getId(), user.getId(), user.getId(), other.getId());
+        for (String group : new String[] {"ACTIVE", "RESOLVED"}) {
+            int count = group.equals("ACTIVE") ? 1 : 2;
+            mockMvc.perform(get("/api/incidents/map").header("Authorization", "Bearer " + token)
+                    .param("west", "-7.1").param("south", "7.9").param("east", "-6.9").param("north", "8.1")
+                    .param("zoom", "15").param("statusGroup", group))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$[0].count").value(count));
+            mockMvc.perform(get("/api/incidents/map-members").header("Authorization", "Bearer " + token)
+                    .param("west", "-7").param("south", "8").param("east", "-7").param("north", "8")
+                    .param("statusGroup", group))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(count));
+        }
+        mockMvc.perform(get("/api/incidents/map").header("Authorization", "Bearer " + token)
+                .param("west", "-7.1").param("south", "7.9").param("east", "-6.9").param("north", "8.1")
+                .param("zoom", "15").param("statusGroup", "OTHER"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void documentsIncidentResponsesAndErrorExtensions() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())

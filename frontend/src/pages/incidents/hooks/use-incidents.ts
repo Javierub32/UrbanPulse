@@ -34,8 +34,20 @@ export function useIncidents() {
       isActive = false;
       controller.abort();
     };
+  // Changing retryKey restarts the focused request when the user retries.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryKey]));
 
   const retry = useCallback(() => setRetryKey((current) => current + 1), []);
-  return { state, retry };
+  const addCreatedIncident = useCallback((created: IncidentListItem) => {
+    if (state.status !== 'success') {
+      retry();
+      return;
+    }
+    setState(current => current.status === 'success' ? {
+      status: 'success',
+      data: [...current.data.filter(incident => incident.id !== created.id), created],
+    } : current);
+  }, [state.status, retry]);
+  return { state, retry, addCreatedIncident };
 }

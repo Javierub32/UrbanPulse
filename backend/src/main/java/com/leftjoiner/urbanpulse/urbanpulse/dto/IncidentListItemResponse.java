@@ -17,4 +17,5 @@ public class IncidentListItemResponse {
     private LocalDateTime registeredAt;
     private Double latitude;
     private Double longitude;
+    private String normalizedAddress;
 }

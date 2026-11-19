@@ -1,0 +1,138 @@
+/* ───────────────────────── Administración (escritorio) ─────────────────────────
+   La estructura y el color base viven en los componentes; aquí solo van el material
+   (cristal, desenfoque), los estados de interacción y las transiciones. */
+
+:root {
+  --admin-font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Geist", sans-serif;
+  --admin-accent: #126f68;
+  --admin-ease: cubic-bezier(.2, .8, .2, 1);
+  --admin-card: rgba(255, 255, 255, .76);
+  --admin-card-border: rgba(255, 255, 255, .7);
+  --admin-card-shadow: 0 8px 30px rgba(15, 56, 58, .07);
+  --admin-card-shadow-hover: 0 18px 40px rgba(15, 56, 58, .14);
+  --admin-hover: rgba(18, 111, 104, .07);
+  --admin-canvas: #ffffff;
+  --admin-grid: rgba(120, 125, 130, .07);
+  --admin-split: rgba(84, 125, 111, .28);
+  --admin-split-fill: rgba(255, 255, 255, .36);
+  --admin-split-edge: rgba(255, 255, 255, .6);
+}
+
+/* Lienzo: un único fondo con cuadrícula para todas las secciones, también bajo el lateral. */
+#admin-canvas {
+  font-family: var(--admin-font); isolation: isolate; overflow: hidden; background-color: var(--admin-canvas);
+  background-image: linear-gradient(var(--admin-grid) 1px, transparent 1px), linear-gradient(90deg, var(--admin-grid) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* Cristal líquido: una capa absoluta dentro de cada GlassPanel. */
+.admin-glass { position: absolute !important; inset: 0; pointer-events: none; }
+.admin-glass--light { --lq-tint: rgba(220, 242, 232, .58); --lq-tint-deep: rgba(230, 246, 240, .40); box-shadow: 0 12px 36px rgba(15, 56, 58, .14); }
+.admin-glass--dark { --lq-tint: rgba(9, 32, 38, .88); --lq-tint-deep: rgba(7, 26, 32, .76); --lq-text: #f3f8f7; box-shadow: 0 20px 50px rgba(6, 26, 30, .26); }
+
+/* Lateral */
+#admin-user-card {
+  background: rgba(244, 255, 250, .38) !important; border-color: rgba(255, 255, 255, .62) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 3px 12px rgba(20, 65, 53, .05);
+}
+#admin-user-link, #admin-tab-list [role='tab'], [id^='admin-sidebar-incident-'] {
+  transition: background-color 180ms var(--admin-ease), transform 180ms var(--admin-ease); cursor: pointer; text-decoration: none;
+}
+#admin-tab-list [role='tab']:hover:not([id$='-selected']), [id^='admin-sidebar-incident-']:hover { background: rgba(255, 255, 255, .38) !important; }
+#admin-tab-list [role='tab']:active, [id^='admin-sidebar-incident-']:active { transform: scale(.98); }
+/* Píldora de cristal que se desliza hasta la pestaña activa (la mueve admin-shell). */
+#admin-nav-pill {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .82), rgba(244, 255, 250, .5));
+  border: 1px solid rgba(255, 255, 255, .85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 6px 16px rgba(20, 65, 53, .12);
+  will-change: transform, height;
+}
+/* Incidencias y sus recientes son una sola pieza partida por una línea: con la vista activa, la
+   píldora pierde la base redondeada y la lista se ilumina debajo en un tono algo más apagado. */
+#admin-recent-incidents {
+  border: 1px solid transparent; border-top-color: var(--admin-split); border-radius: 0 0 14px 14px;
+  transition: background-color 200ms var(--admin-ease), border-color 200ms var(--admin-ease), box-shadow 200ms var(--admin-ease);
+}
+#admin-nav-pill { transition: border-radius 160ms var(--admin-ease), box-shadow 160ms var(--admin-ease); }
+#admin-tab-list:has(#admin-nav-incidents-selected) #admin-nav-pill {
+  border-bottom-left-radius: 0 !important; border-bottom-right-radius: 0 !important; border-bottom-color: transparent;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9);
+}
+#admin-tab-list:has(#admin-nav-incidents-selected) #admin-recent-incidents {
+  background-color: var(--admin-split-fill); border-color: var(--admin-split-edge); border-top-color: var(--admin-split);
+  box-shadow: 0 6px 16px rgba(20, 65, 53, .1);
+}
+
+/* Tarjetas y métricas */
+[id^='admin-metric-'], [id^='admin-card-'], #admin-attention-card, #admin-incidents-card {
+  background: var(--admin-card) !important; border: 1px solid var(--admin-card-border) !important;
+  box-shadow: var(--admin-card-shadow);
+  backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+[id^='admin-metric-'] { transition: transform 240ms var(--admin-ease), box-shadow 240ms var(--admin-ease); }
+#admin-settings-button {
+  background: var(--admin-card) !important; border: 1px solid var(--admin-card-border) !important; box-shadow: var(--admin-card-shadow);
+  backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+#admin-settings-button svg { transition: transform 500ms var(--admin-ease); }
+#admin-settings-button:hover svg { transform: rotate(60deg); }
+[id^='admin-dashboard-incident-'], [id^='admin-list-incident-'] { text-decoration: none; cursor: pointer; transition: background-color 160ms var(--admin-ease); }
+[id^='admin-dashboard-incident-']:hover, [id^='admin-list-incident-']:hover { background: var(--admin-hover) !important; }
+/* Mapa: filtros en píldora, menús y tarjetas flotantes sobre el mapa. */
+[id^='admin-filter-'], [id^='admin-select-'], [id^='admin-option-'], #admin-map-close, #admin-map-open, #admin-map-clear {
+  cursor: pointer; transition: background-color 160ms var(--admin-ease), border-color 160ms var(--admin-ease), opacity 160ms var(--admin-ease);
+}
+[id^='admin-select-']:hover { border-color: var(--admin-accent) !important; }
+[id^='admin-option-']:hover:not([aria-selected='true']), #admin-map-close:hover { background: var(--admin-hover) !important; }
+#admin-map-open:hover { opacity: .88; }
+#admin-map-clear:hover { opacity: .7; }
+/* El mapa ocupa toda la pantalla: la atribución se aparta de la barra lateral flotante. */
+#admin-map .maplibregl-ctrl-bottom-left { left: 294px; }
+#admin-map .maplibregl-ctrl-attrib { font-family: var(--admin-font); font-size: 10px; }
+/* Filtros sobre el mapa: cristal líquido más transparente, con más refracción que tinte. */
+#admin-map .citizen-liquid { --lq-tint: rgba(255, 255, 255, .10); --lq-tint-deep: rgba(255, 255, 255, .04); }
+#admin-map .citizen-glass { backdrop-filter: blur(6px) saturate(170%); -webkit-backdrop-filter: blur(6px) saturate(170%); }
+[id^='admin-span-'] { cursor: pointer; transition: background-color 160ms var(--admin-ease); }
+[id^='admin-span-']:hover:not([aria-selected='true']) { background: var(--admin-hover); }
+
+@media (hover: hover) {
+  [id^='admin-metric-']:hover { transform: translateY(-3px); box-shadow: var(--admin-card-shadow-hover); }
+}
+
+/* Foco de teclado */
+#admin-tab-list [role='tab']:focus-visible, #admin-user-link:focus-visible, #admin-settings-button:focus-visible,
+[id^='admin-sidebar-incident-']:focus-visible, [id^='admin-dashboard-incident-']:focus-visible,
+[id^='admin-list-incident-']:focus-visible, [id^='admin-span-']:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --admin-card: rgba(27, 43, 49, .8); --admin-card-border: rgba(255, 255, 255, .1);
+    --admin-card-shadow: 0 8px 30px rgba(0, 0, 0, .28); --admin-card-shadow-hover: 0 18px 40px rgba(0, 0, 0, .42);
+    --admin-hover: rgba(131, 217, 194, .1); --admin-canvas: #101d22; --admin-grid: rgba(255, 255, 255, .06);
+    --admin-split: rgba(255, 255, 255, .14); --admin-split-fill: rgba(131, 217, 194, .08); --admin-split-edge: rgba(255, 255, 255, .1); --admin-accent: #83d9c2;
+  }
+  .admin-glass--light { --lq-tint: rgba(28, 45, 51, .78); --lq-tint-deep: rgba(20, 35, 39, .72); }
+  .admin-glass--dark { --lq-tint: rgba(5, 20, 25, .9); --lq-tint-deep: rgba(4, 16, 20, .8); }
+  #admin-user-card { background: rgba(110, 152, 135, .2) !important; border-color: rgba(255, 255, 255, .16) !important; box-shadow: none; }
+  #admin-tab-list [role='tab']:hover:not([id$='-selected']), [id^='admin-sidebar-incident-']:hover { background: rgba(255, 255, 255, .08) !important; }
+  #admin-tab-list:has(#admin-nav-incidents-selected) #admin-nav-pill { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16); }
+  #admin-tab-list:has(#admin-nav-incidents-selected) #admin-recent-incidents { box-shadow: 0 6px 16px rgba(0, 0, 0, .3); }
+  #admin-nav-pill { background: linear-gradient(180deg, rgba(131, 217, 194, .26), rgba(131, 217, 194, .12)); border-color: rgba(255, 255, 255, .18); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 6px 16px rgba(0, 0, 0, .3); }
+  #admin-recent-incidents { border-top-color: rgba(255, 255, 255, .14); }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --admin-card: #ffffff; }
+  @media (prefers-color-scheme: dark) { :root { --admin-card: #1b2b31; } }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root { --admin-card: #f5f8f7; }
+  .admin-glass { display: none; }
+  #admin-tab-list { background: #e6f2ec; }
+  [id^='admin-metric-'], [id^='admin-card-'], #admin-attention-card, #admin-incidents-card, #admin-settings-button { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  @media (prefers-color-scheme: dark) { :root { --admin-card: #1b2b31; } #admin-tab-list { background: #1c2d33; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  #admin-canvas *, #admin-settings-button svg { transition: none !important; }
+  [id^='admin-metric-']:hover { transform: none; }
+}

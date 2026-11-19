@@ -1,6 +1,7 @@
 package com.leftjoiner.urbanpulse.urbanpulse.controller;
 
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentRequest;
+import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatusGroup;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentDetailResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentListItemResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentResponse;
@@ -71,7 +72,7 @@ public class IncidentController {
         return incidentService.listAccessibleIncidents(principal);
     }
 
-    @Operation(summary = "Consultar incidencias accesibles agrupadas para el mapa", description = "Agrupa únicamente las incidencias accesibles para el usuario autenticado.", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(summary = "Consultar incidencias accesibles agrupadas para el mapa", description = "Agrupa únicamente las incidencias accesibles para el usuario autenticado. statusGroup admite ACTIVE o RESOLVED y se combina con status. since es inclusivo y until es exclusivo.", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Puntos y agrupaciones", content = @Content(array = @ArraySchema(schema = @Schema(implementation = com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentMapItem.class)))),
         @ApiResponse(responseCode = "400", description = "Límites, zoom o filtros no válidos", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
@@ -85,11 +86,13 @@ public class IncidentController {
             @RequestParam(required = false) com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory category,
             @RequestParam(required = false) com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus status,
             @RequestParam(required = false) java.time.Instant since,
+            @RequestParam(required = false) java.time.Instant until,
+            @RequestParam(required = false) IncidentStatusGroup statusGroup,
             @AuthenticationPrincipal UrbanPulsePrincipal principal) {
-        return incidentMapService.find(west, south, east, north, zoom, category, status, since, principal);
+        return incidentMapService.find(west, south, east, north, zoom, category, status, since, until, statusGroup, principal);
     }
 
-    @Operation(summary = "Consultar incidencias accesibles de una agrupación", description = "Devuelve páginas de hasta 50 incidencias accesibles del área del grupo.", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(summary = "Consultar incidencias accesibles de una agrupación", description = "Devuelve páginas de hasta 50 incidencias accesibles del área del grupo; admite los mismos filtros statusGroup, status, since y until que el mapa; until es exclusivo.", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Incidencias accesibles", content = @Content(array = @ArraySchema(schema = @Schema(implementation = com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentMapItem.class)))),
         @ApiResponse(responseCode = "400", description = "Área o página no válida", content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemResponseSchema.class))),
@@ -103,8 +106,10 @@ public class IncidentController {
             @RequestParam(required = false) com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory category,
             @RequestParam(required = false) com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus status,
             @RequestParam(required = false) java.time.Instant since,
+            @RequestParam(required = false) java.time.Instant until,
+            @RequestParam(required = false) IncidentStatusGroup statusGroup,
             @AuthenticationPrincipal UrbanPulsePrincipal principal) {
-        return incidentMapService.members(west, south, east, north, category, status, page, since, principal);
+        return incidentMapService.members(west, south, east, north, category, status, page, since, until, statusGroup, principal);
     }
 
     @Operation(summary = "Consultar una incidencia accesible", description = "Devuelve el detalle y el historial si el usuario tiene acceso a la incidencia.", security = @SecurityRequirement(name = "bearerAuth"))
