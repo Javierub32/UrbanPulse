@@ -8,6 +8,9 @@ import com.leftjoiner.urbanpulse.urbanpulse.mapper.IncidentMapper;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.*;
 import java.time.*;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.locationtech.jts.geom.*;
 import org.springframework.data.domain.*;
@@ -39,20 +42,40 @@ public class InitialReviewService {
     }
 
     @Transactional
-    public void edit(UUID id, ReviewEditRequest request) {
+    public void edit(UUID id, ReviewEditRequest request, UUID actorId) {
         IncidentEntity incident = pendingIncident(id);
-        incident.setCategory(request.category());
-        incident.setPriority(request.priority());
         Geometry point = new GeometryFactory(new PrecisionModel(), 4326)
             .createPoint(new Coordinate(request.longitude(), request.latitude()));
-        if (incident.getLocation() == null || !incident.getLocation().equalsExact(point)) {
+        List<String> changedFields = new ArrayList<>();
+        if (!Objects.equals(incident.getCategory(), request.category())) changedFields.add("categoría");
+        if (!Objects.equals(incident.getPriority(), request.priority())) changedFields.add("prioridad");
+        boolean locationChanged = incident.getLocation() == null || !incident.getLocation().equalsExact(point);
+        if (locationChanged) changedFields.add("ubicación");
+        if (changedFields.isEmpty()) return;
+
+        UserEntity actor = users.findById(actorId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        incident.setCategory(request.category());
+        incident.setPriority(request.priority());
+        if (locationChanged) {
             incident.setLocation(point);
             // The previous address cannot be assumed to describe the new coordinates.
             incident.setNormalizedAddress(null);
             incident.setNeighborhood(null);
             incident.setDistrict(null);
         }
-        incident.setUpdatedAt(LocalDateTime.now(ZoneOffset.UTC));
+        incident.setUpdatedAt(now);
+
+        StatusChangeEntity change = new StatusChangeEntity();
+        change.setIncident(incident);
+        change.setUser(actor);
+        change.setPreviousStatus(incident.getStatus());
+        change.setStatus(incident.getStatus());
+        change.setChangedAt(now);
+        change.setReason(String.join(", ", changedFields));
+        change.setComment("INCIDENT_EDITED");
+        history.save(change);
     }
 
     @Transactional

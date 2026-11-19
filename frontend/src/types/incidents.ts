@@ -19,6 +19,6 @@ export type IncidentDetail = IncidentListItem & {
   normalizedAddress: string | null;
   priority: string | null;
   updatedAt: string | null;
-  history: { previousStatus: string | null; status: string; changedAt: string | null; actorId: string | null; reason: string | null; action: string | null }[];
+  history: { previousStatus: string | null; status: string; changedAt: string | null; actorId: string | null; actorName: string | null; reason: string | null; action: string | null }[];
   atmosphericData: { key: string; value: string; unit: string; source: string; observedAt: string | null }[];
 };

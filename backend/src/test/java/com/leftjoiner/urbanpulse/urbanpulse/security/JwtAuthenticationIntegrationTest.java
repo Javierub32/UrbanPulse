@@ -330,6 +330,46 @@ class JwtAuthenticationIntegrationTest {
         assertEquals("VALIDATED", incidents.findById(UUID.fromString(id)).orElseThrow().getStatus().name());
     }
 
+    @Test
+    void operatorEditsAreAttributedAndVisibleInIncidentHistory() throws Exception {
+        UserEntity citizen = user(UserRole.CITIZEN);
+        UserEntity operator = user(UserRole.OPERATOR);
+        String citizenToken = token(citizen);
+        String operatorToken = token(operator);
+        var created = send(request("/api/incidents/create").header("Authorization", "Bearer " + citizenToken)
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(
+                    "{\"title\":\"Farola\",\"description\":\"Apagada\",\"category\":\"STREET_LIGHTING\",\"latitude\":36.7,\"longitude\":-4.4}")));
+        assertEquals(201, created.statusCode());
+        String id = json.readTree(created.body()).path("id").asString();
+        String editPath = "/api/operator/reviews/" + id + "/edit";
+        String editBody = "{\"category\":\"TRAFFIC\",\"priority\":\"HIGH\",\"latitude\":36.71,\"longitude\":-4.4}";
+        var forbidden = send(request(editPath).header("Authorization", "Bearer " + citizenToken)
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(editBody)));
+        assertEquals(403, forbidden.statusCode());
+        var edited = send(request(editPath).header("Authorization", "Bearer " + operatorToken)
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(editBody)));
+        assertEquals(200, edited.statusCode());
+        // Repeating exactly the same edit should not add a misleading history entry.
+        assertEquals(200, send(request(editPath).header("Authorization", "Bearer " + operatorToken)
+                .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(editBody))).statusCode());
+        var detail = send(request("/api/incidents/" + id).header("Authorization", "Bearer " + operatorToken).GET());
+        assertEquals(200, detail.statusCode());
+        var entries = json.readTree(detail.body()).path("history");
+        assertEquals(1, entries.size());
+        var entry = entries.get(0);
+        assertEquals("INCIDENT_EDITED", entry.path("action").asString());
+        assertEquals(operator.getId().toString(), entry.path("actorId").asString());
+        assertEquals(operator.getName(), entry.path("actorName").asString());
+        assertEquals("REPORTED", entry.path("previousStatus").asString());
+        assertEquals("REPORTED", entry.path("status").asString());
+        assertTrue(entry.path("reason").asString().contains("categoría"));
+        assertTrue(entry.path("reason").asString().contains("prioridad"));
+        assertTrue(entry.path("reason").asString().contains("ubicación"));
+        assertFalse(entry.path("changedAt").asString().isBlank());
+        var citizenDetail = send(request("/api/incidents/" + id).header("Authorization", "Bearer " + citizenToken).GET());
+        assertTrue(json.readTree(citizenDetail.body()).path("history").get(0).path("actorName").isNull());
+    }
+
     private UserEntity user(UserRole role) {
         UserEntity user = new UserEntity();
         user.setName("JWT test citizen");

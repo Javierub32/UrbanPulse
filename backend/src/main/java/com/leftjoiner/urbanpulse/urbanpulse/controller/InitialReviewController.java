@@ -22,7 +22,10 @@ public class InitialReviewController {
         return service.pending(page, size);
     }
     @PostMapping("/{id}/edit")
-    public void edit(@PathVariable UUID id, @Valid @RequestBody ReviewEditRequest request) { service.edit(id, request); }
+    public void edit(@PathVariable UUID id, @Valid @RequestBody ReviewEditRequest request,
+                     @AuthenticationPrincipal UrbanPulsePrincipal actor) {
+        service.edit(id, request, actor.getId());
+    }
     @PostMapping("/{id}/validate")
     public void validate(@PathVariable UUID id, @AuthenticationPrincipal UrbanPulsePrincipal actor) {
         service.act(id, actor.getId(), IncidentStatus.VALIDATED, null, "VALIDATED");

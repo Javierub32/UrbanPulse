@@ -11,3 +11,5 @@ La cola del operador contiene incidencias con estado `REPORTED`. Solo un operado
 La solicitud se puede ver en el historial de la incidencia, pero no se envía una notificación ni se implementa una respuesta del ciudadano. Esas funcionalidades están pendientes de definición.
 
 Las operaciones se serializan por incidencia mediante un bloqueo de base de datos. Una incidencia que ya no esté en `REPORTED` devuelve 409. Los cambios de estado y las solicitudes guardan actor, fecha, estado anterior y posterior, y motivo si corresponde. La migración V6 permite que el historial previo a una asignación no tenga técnico asignado.
+
+Las ediciones con cambios registran al operador, la fecha y los campos modificados en el historial. El nombre del autor se muestra a los operadores. Guardar sin modificar campos no crea una entrada.

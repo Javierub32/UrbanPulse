@@ -14,4 +14,5 @@ public class IncidentHistoryResponse {
     private java.util.UUID actorId;
     private String reason;
     private String action;
+    private String actorName;
 }
