@@ -22,6 +22,7 @@ import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentListItemResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
 import org.springframework.security.authentication.BadCredentialsException;
+import com.leftjoiner.urbanpulse.urbanpulse.service.IncidentReadService;
 import com.leftjoiner.urbanpulse.urbanpulse.service.IncidentService;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -59,6 +60,7 @@ class IncidentControllerTest {
 
     @Autowired private MockMvc mockMvc;
     @MockitoBean private IncidentService service;
+    @MockitoBean private IncidentReadService incidentReadService;
     @MockitoBean private com.leftjoiner.urbanpulse.urbanpulse.service.IncidentMapService incidentMapService;
 
     @Test

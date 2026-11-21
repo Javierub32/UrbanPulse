@@ -18,7 +18,3 @@ type Incident = Coordinate & { title: string; description: string; category: Cat
 export function createIncident(incident: Incident) {
   return apiRequest<Omit<IncidentListItem, 'normalizedAddress'>>('/api/incidents/create', { method: 'POST', body: JSON.stringify(incident) });
 }
-
-export async function getIncidents(signal?: AbortSignal): Promise<IncidentListItem[]> {
-  return apiRequest<IncidentListItem[]>('/api/incidents/public', { signal });
-}

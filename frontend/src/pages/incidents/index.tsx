@@ -1,5 +1,5 @@
 import { SymbolView } from 'expo-symbols';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, Animated, Easing, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,16 +11,17 @@ import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/context/AuthContext';
 import { categories } from '@/pages/report/services/report-service';
 import { ReportSheet } from '@/pages/report/report-sheet';
-import { useIncidents } from './hooks/use-incidents';
+import { useIncidents, useIncidentSummary } from './hooks/use-incidents';
 import { IncidentCard } from './components/incident-card';
 import { DateField } from './components/date-field';
 import { TICKET_STACK_STEP, TicketOverlay, TicketStackItem, useTicketDetail, type SelectedTicket, type TicketArrival } from './components/ticket-stack';
 import { ScreenBehindTicket } from './components/screen-behind-ticket';
 import { TicketGrid } from './components/ticket-grid';
-import { dateBounds, initialFilters, matchesFilters, parseDate, statusGroup, type Filters, type StatusGroup } from './incident-filters';
+import { activeStatuses, dateBounds, initialFilters, matchesFilters, parseDate, resolvedStatuses, type Filters, type StatusGroup } from './incident-filters';
 import type { IncidentListItem } from '@/types/incidents';
 
 const LIST_TOP_PADDING = 14;
+const statusesByGroup = { all: [], active: activeStatuses, resolved: resolvedStatuses, rejected: ['REJECTED'] };
 
 const quickFilters: { value: StatusGroup; label: string }[] = [{ value: 'all', label: 'Todos' }, { value: 'active', label: 'En proceso' }, { value: 'resolved', label: 'Resueltos' }, { value: 'rejected', label: 'Rechazados' }];
 export default function CitizenIncidents() {
@@ -29,12 +30,13 @@ export default function CitizenIncidents() {
   const citizen = user?.role === 'CITIZEN';
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { state, retry, addCreatedIncident } = useIncidents();
   const [filters, setFilters] = useState<Filters>(initialFilters);
   const [advanced, setAdvanced] = useState(false);
   const [map, setMap] = useState(false);
   const [filterHeight, setFilterHeight] = useState(0);
   const [reportOpen, setReportOpen] = useState(false);
+  const [created, setCreated] = useState<IncidentListItem>();
+  useFocusEffect(useCallback(() => () => setCreated(undefined), []));
   const [arrival, setArrival] = useState<TicketArrival | null>(null);
   const listRef = useRef<FlatList<IncidentListItem>>(null);
   const listMetrics = useRef({ viewport: 0, offset: 0 });
@@ -52,6 +54,14 @@ export default function CitizenIncidents() {
   }, []);
   const bounds = useMemo(() => dateBounds(filters), [filters]);
   const { since, until } = bounds;
+  const { state, retry, loadMore } = useIncidents({
+    statuses: statusesByGroup[filters.group],
+    category: filters.category,
+    since,
+    until,
+  }, bounds.valid);
+  const { state: totals, retry: refreshTotals } = useIncidentSummary();
+  const page = state.status === 'success' ? state.data : null;
   const showAdvanced = () => {
     setAdvanced(true);
     Animated.timing(sheetProgress, { toValue: 1, duration: reduceMotion ? 0 : 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
@@ -60,8 +70,21 @@ export default function CitizenIncidents() {
     if (filters.period === 'custom' && !bounds.valid) return;
     Animated.timing(sheetProgress, { toValue: 0, duration: reduceMotion ? 0 : 200, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(({ finished }) => { if (finished) setAdvanced(false); });
   };
-  const incidents = useMemo(() => state.status === 'success' ? [...state.data].sort((a, b) => (parseDate(b.registeredAt)?.getTime() ?? 0) - (parseDate(a.registeredAt)?.getTime() ?? 0) || b.id.localeCompare(a.id)) : [], [state]);
-  const visible = useMemo(() => incidents.filter(item => matchesFilters(item, filters, since, until)), [incidents, filters, since, until]);
+  const visible = useMemo(() => {
+    const items = page?.items ?? [];
+    if (!created || state.status === 'error' || items.some(({ id }) => id === created.id)
+      || !matchesFilters(created, filters, since, until)) {
+      return items;
+    }
+    // El POST permite mostrar de inmediato el aviso creado, aunque su fecha lo sitúe más adelante.
+    const time = parseDate(created.registeredAt)?.getTime() ?? -Infinity;
+    const index = items.findIndex((item) => {
+      const itemTime = parseDate(item.registeredAt)?.getTime() ?? -Infinity;
+      return itemTime < time || (itemTime === time && item.id < created.id);
+    });
+    if (index === -1) return [...items, created];
+    return [...items.slice(0, index), created, ...items.slice(index)];
+  }, [created, filters, page?.items, since, state.status, until]);
   const frontTicketId = citizen && !map ? visible.at(-1)?.id : undefined;
   const frontTicketDetail = useTicketDetail(frontTicketId);
   const selectedDetail = useTicketDetail(selectedTicket?.last ? undefined : selectedTicket?.incident.id);
@@ -75,7 +98,9 @@ export default function CitizenIncidents() {
     setMap(false);
     if (!matchesFilters(incident, filters, since, until)) setFilters(initialFilters);
     setArrival({ id: incident.id, progress: new Animated.Value(0) });
-    addCreatedIncident(incident);
+    setCreated(incident);
+    retry();
+    refreshTotals();
   }
 
   useLayoutEffect(() => {
@@ -103,7 +128,7 @@ export default function CitizenIncidents() {
   const chromeOpacity = ticketProgress.interpolate({ inputRange: [0, 0.4, 1], outputRange: [1, 0, 0] });
   const mapFilters = { category: filters.category, status: filters.group === 'rejected' ? 'REJECTED' : '', since, until, statusGroup: filters.group === 'active' || filters.group === 'resolved' ? filters.group.toUpperCase() : '' };
   const summary = <View style={styles.summaryRow}>{[{ label: 'En proceso', group: 'active', color: t.warning, bg: t.glassWarm }, { label: 'Resueltos', group: 'resolved', color: t.success, bg: t.glassSuccess }].map(item => <Pressable key={item.label} accessibilityRole="button" accessibilityState={{ selected: filters.group === item.group }} onPress={() => setFilters(f => ({ ...f, group: f.group === item.group ? 'all' : item.group as StatusGroup }))} style={{ flex: 1 }}><GlassSurface style={[styles.summary, { backgroundColor: item.bg, borderColor: item.color, borderWidth: filters.group === item.group ? 2.5 : 1.5 }]}>
-      <Text style={[styles.count, { color: item.color }]}>{state.status === 'success' ? incidents.filter(incident => statusGroup(incident.status) === item.group).length : '–'}</Text><Text numberOfLines={1} style={[styles.summaryLabel, { color: item.color }]}>{item.label}</Text><View style={[styles.summaryDot, { backgroundColor: item.color }]} />
+      <Text style={[styles.count, { color: item.color }]}>{totals.status === 'success' ? statusesByGroup[item.group as 'active' | 'resolved'].reduce((sum, status) => sum + (totals.data.byStatus[status] ?? 0), 0) : '–'}</Text><Text numberOfLines={1} style={[styles.summaryLabel, { color: item.color }]}>{item.label}</Text><View style={[styles.summaryDot, { backgroundColor: item.color }]} />
     </GlassSurface></Pressable>)}</View>;
   const quickControls = <View onLayout={event => setFilterHeight(event.nativeEvent.layout.height)} style={styles.quickControls}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickScroll} contentContainerStyle={styles.quickRow} accessibilityLabel="Filtrar avisos por estado">
@@ -140,6 +165,12 @@ export default function CitizenIncidents() {
         onScroll={event => { listMetrics.current.offset = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16}
         removeClippedSubviews={arrival || selectedTicket ? false : undefined}
         scrollEnabled={!selectedTicket}
+        ListFooterComponent={page?.nextPageToken ? <View style={styles.empty}>
+          {page.moreError && <Text accessibilityRole="alert" style={[styles.emptyText, { color: t.ink }]}>{page.moreError}</Text>}
+          <Pressable accessibilityRole="button" accessibilityState={{ busy: page.loadingMore }} disabled={page.loadingMore} onPress={loadMore}>
+            <Text style={[styles.action, { color: t.accent }]}>{page.loadingMore ? 'Cargando avisos…' : page.moreError ? 'Reintentar' : 'Mostrar más avisos'}</Text>
+          </Pressable>
+        </View> : null}
         renderItem={({ item, index }) => citizen ? <TicketStackItem
           incident={item}
           detail={item.id === frontTicketId ? frontTicketDetail : undefined}

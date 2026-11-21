@@ -9,7 +9,7 @@ import type { IncidentListItem } from '@/types/incidents';
 import { Skeleton } from './motion';
 import { useAdminTheme } from './theme';
 
-const STACK_SIZE = 12;
+export const STACK_SIZE = 12;
 
 type ReviewTicketProps = {
   incident: IncidentListItem;
@@ -112,7 +112,7 @@ function ReviewTicketDeal({ tickets }: { tickets: IncidentListItem[] }) {
 export function PendingReviewStack({ incidents, loading, error }: { incidents: IncidentListItem[]; loading: boolean; error: boolean }) {
   const theme = useAdminTheme();
   const tickets = useMemo(
-    () => incidents.filter(({ status }) => status === 'REPORTED').slice(0, STACK_SIZE).reverse(),
+    () => [...incidents].reverse(),
     [incidents],
   );
 

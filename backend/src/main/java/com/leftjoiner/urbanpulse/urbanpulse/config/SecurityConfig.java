@@ -50,7 +50,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
-                        .requestMatchers(HttpMethod.GET, "/api/incidents/public", "/api/incidents/map",
+                        .requestMatchers(HttpMethod.GET, "/api/incidents", "/api/incidents/summary", "/api/incidents/public", "/api/incidents/map",
                                 "/api/incidents/map-members")
                                 .hasAnyRole("CITIZEN", "OPERATOR", "TECHNICIAN")
                         .requestMatchers(new RegexRequestMatcher("^/api/incidents/[0-9a-fA-F-]{36}(?:\\?.*)?$", "GET"))

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, Text, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, ClipPath, Defs, G, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 
-import type { IncidentListItem } from '@/types/incidents';
+import type { IncidentSummary } from '@/services/incidents-service';
 import { SPANS, buildSeries, type Span } from './analytics';
 import { monotonePath, niceMax } from './chart-geometry';
 import { useFocusProgress } from './motion';
@@ -39,12 +39,12 @@ function SpanSwitch({ span, onChange }: { span: Span; onChange: (span: Span) => 
   );
 }
 
-export function ActivityChart({ incidents }: { incidents: IncidentListItem[] }) {
+export function ActivityChart({ byDay }: { byDay: IncidentSummary['byDay'] }) {
   const theme = useAdminTheme();
   const [span, setSpan] = useState<Span>(7);
   const [width, setWidth] = useState(560);
   const [active, setActive] = useState<number | null>(null);
-  const series = useMemo(() => buildSeries(incidents, span), [incidents, span]);
+  const series = useMemo(() => buildSeries(byDay, span), [byDay, span]);
   const progress = useFocusProgress(1100, 260, span);
   const shownTotal = Math.round(series.total * progress);
 

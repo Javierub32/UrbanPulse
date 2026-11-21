@@ -7,6 +7,7 @@ import Svg, { Path } from 'react-native-svg';
 
 import { useAuth } from '@/context/AuthContext';
 import { AdminLogoutButton } from './admin-logout-button';
+import { useIncidents } from '@/pages/incidents/hooks/use-incidents';
 import { AdminIncidentsProvider, useAdminIncidents } from '@/pages/admin-dashboard/admin-incidents-context';
 import { relativeTime } from '@/pages/admin-dashboard/analytics';
 import { GlassPanel } from '@/pages/admin-dashboard/glass-panel';
@@ -147,12 +148,14 @@ function SidebarHeader({ compact }: { compact: boolean }) {
 
 function RecentIncidents() {
   const theme = useAdminTheme();
-  const { state, retry } = useAdminIncidents();
+  const { revision } = useAdminIncidents();
+  const { state, retry, loadMore } = useIncidents({}, true, revision);
+  const page = state.status === 'success' ? state.data : null;
   return (
     <View nativeID="admin-recent-incidents" accessibilityLabel="Incidencias recientes" style={{ flex: 1, minHeight: 0, paddingVertical: 8, paddingHorizontal: 4 }}>
       <FlatList
         nativeID="admin-recent-incidents-scroll"
-        data={state.status === 'success' ? state.data : []}
+        data={page?.items ?? []}
         keyExtractor={(incident) => incident.id}
         style={{ flex: 1 }}
         contentContainerStyle={{ gap: 2, paddingBottom: 28 }}
@@ -168,6 +171,17 @@ function RecentIncidents() {
             {state.status === 'success' && <Text style={{ color: theme.muted, paddingHorizontal: 6 }}>Aún no hay incidencias.</Text>}
           </View>
         }
+        ListFooterComponent={page?.nextPageToken ? (
+          <View style={{ paddingHorizontal: 6 }}>
+            {page.moreError && <Text accessibilityRole="alert" style={{ color: theme.muted }}>{page.moreError}</Text>}
+            <Pressable accessibilityRole="button" accessibilityState={{ busy: page.loadingMore }} disabled={page.loadingMore}
+              onPress={loadMore} style={{ minHeight: 44, justifyContent: 'center' }}>
+              <Text style={{ color: theme.accent }}>
+                {page.loadingMore ? 'Cargando…' : page.moreError ? 'Reintentar' : 'Mostrar más incidencias'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
         renderItem={({ item: incident, index }) => {
           const title = incident.title?.trim() || 'Incidencia sin título';
           const row = (
@@ -216,8 +230,7 @@ export function AdminWorkspace({ children }: PropsWithChildren) {
               <NavGroup>
                 {items.map(([icon, label, href]) => <NavItem key={icon} icon={icon} label={label} href={href} isFocused={href === activePath} compact={compact} />)}
               </NavGroup>
-              <View style={{ flex: 1, minHeight: 0, display: compact ? 'none' : 'flex' }}><RecentIncidents /></View>
-              {compact && <View style={{ flex: 1 }} />}
+              {compact ? <View style={{ flex: 1 }} /> : <View style={{ flex: 1, minHeight: 0 }}><RecentIncidents /></View>}
               <AdminLogoutButton placement="sidebar" compact={compact} />
             </View>
           </GlassPanel>

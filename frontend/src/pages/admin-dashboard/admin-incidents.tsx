@@ -1,23 +1,24 @@
 import { Link } from 'expo-router';
 import { Search, SlidersHorizontal } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { GlassChip } from '@/components/glass-chip';
 import { GlassSurface } from '@/components/glass-surface';
 import { TicketPhoto } from '@/components/incident-ticket';
 import { DateField } from '@/pages/incidents/components/date-field';
+import { useIncidents, useIncidentSummary } from '@/pages/incidents/hooks/use-incidents';
 import { parseDate, parseLocalDay } from '@/pages/incidents/incident-filters';
 import { categories } from '@/pages/report/services/report-service';
 import type { IncidentListItem } from '@/types/incidents';
 
 import { useAdminIncidents } from './admin-incidents-context';
 import { ADMIN_SIDEBAR_INSET } from './admin-shell';
-import { inGroup, type StatusGroup } from './analytics';
+import { groupCount, groupStatuses, inGroup, type StatusGroup } from './analytics';
 import { GlassFilterMenu } from './glass-filter-menu';
 import { incidentStatusOptions } from './incident-status';
 import { Reveal, Skeleton } from './motion';
-import { PendingReviewStack } from './pending-review-stack';
+import { PendingReviewStack, STACK_SIZE } from './pending-review-stack';
 import { StatusPill } from './status-pill';
 import { useAdminTheme } from './theme';
 
@@ -34,10 +35,6 @@ const REVIEW_WIDTH = 320;
 const COLUMN_GAP = 24;
 const PANEL_PADDING = 14;
 const GRID_GAP = 12;
-
-function normalize(value: string) {
-  return value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-}
 
 function IncidentCard({ incident }: { incident: IncidentListItem }) {
   const theme = useAdminTheme();
@@ -71,43 +68,39 @@ function IncidentCard({ incident }: { incident: IncidentListItem }) {
 export default function AdminIncidentsScreen() {
   const theme = useAdminTheme();
   const { width } = useWindowDimensions();
-  const { state, retry } = useAdminIncidents();
+  const { revision } = useAdminIncidents();
   const [filters, setFilters] = useState(initialFilters);
+  const [query, setQuery] = useState('');
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [limit, setLimit] = useState(GRID_BATCH);
 
-  const incidents = useMemo(() => state.status === 'success' ? state.data : [], [state]);
+  useEffect(() => {
+    const timeout = setTimeout(() => setQuery(filters.query), 220);
+    return () => clearTimeout(timeout);
+  }, [filters.query]);
+
   const since = parseLocalDay(filters.from);
   const lastDay = parseLocalDay(filters.to);
   const invalidDates = Boolean(since && lastDay && since > lastDay);
+  if (lastDay) lastDay.setDate(lastDay.getDate() + 1);
+
+  const searchPending = query !== filters.query;
+  const { state, retry, loadMore } = useIncidents({
+    size: GRID_BATCH,
+    statuses: filters.status ? [filters.status] : groupStatuses[filters.group],
+    category: filters.category,
+    query,
+    since: since?.toISOString(),
+    until: lastDay?.toISOString(),
+    includeTotal: true,
+  }, !invalidDates && !searchPending, revision);
+
+  const { state: pending } = useIncidents({ size: STACK_SIZE, statuses: ['REPORTED'] }, true, revision);
+  const { state: summary } = useIncidentSummary(undefined, revision);
+  const page = state.status === 'success' ? state.data : null;
+  const visible = page?.items ?? [];
+  const total = page?.totalElements ?? 0;
   const advancedCount = Number(Boolean(filters.category)) + Number(Boolean(filters.status)) + Number(Boolean(filters.from || filters.to));
   const filtering = advancedCount > 0 || !!filters.query.trim() || filters.group !== 'all';
-
-  const matching = useMemo(() => {
-    if (invalidDates) return [];
-    const needle = normalize(filters.query.trim());
-    const start = parseLocalDay(filters.from);
-    const end = parseLocalDay(filters.to);
-    if (end) end.setDate(end.getDate() + 1);
-
-    return incidents.filter((incident) => {
-      if (filters.category && incident.category !== filters.category) return false;
-      if (filters.status && incident.status !== filters.status) return false;
-      if (needle && ![incident.title, incident.normalizedAddress].some((value) => value && normalize(value).includes(needle))) return false;
-      if (!start && !end) return true;
-
-      const date = parseDate(incident.registeredAt);
-      return date !== null && (!start || date >= start) && (!end || date < end);
-    });
-  }, [incidents, invalidDates, filters.category, filters.status, filters.query, filters.from, filters.to]);
-
-  const counts = useMemo(() => Object.fromEntries(groups.map(({ value }) => [
-    value, incidents.filter(({ status }) => inGroup(status, value)).length,
-  ])), [incidents]);
-  const visible = useMemo(
-    () => matching.filter((incident) => inGroup(incident.status, filters.group)),
-    [matching, filters.group],
-  );
   const compact = width < 1100;
   const horizontalPadding = compact ? 20 : 42;
   const contentWidth = width - ADMIN_SIDEBAR_INSET - horizontalPadding * 2;
@@ -118,7 +111,6 @@ export default function AdminIncidentsScreen() {
 
   function updateFilters(changes: Partial<typeof initialFilters>) {
     setFilters((current) => ({ ...current, ...changes }));
-    setLimit(GRID_BATCH);
   }
 
   return (
@@ -129,7 +121,8 @@ export default function AdminIncidentsScreen() {
       <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>Incidencias</Text>
       <View style={[styles.layout, sideBySide && styles.twoSections]}>
         <View style={styles.reviewColumn}>
-          <PendingReviewStack incidents={incidents} loading={state.status === 'loading'} error={state.status === 'error'} />
+          <PendingReviewStack incidents={pending.status === 'success' ? pending.data.items : []}
+            loading={pending.status === 'loading'} error={pending.status === 'error'} />
         </View>
 
         <View style={[styles.results, sideBySide && styles.rightColumn]}>
@@ -141,7 +134,7 @@ export default function AdminIncidentsScreen() {
                   nativeID={`admin-filter-${option.value}`}
                   refractive
                   clear
-                  label={`${option.label} ${counts[option.value]}`}
+                  label={summary.status === 'success' ? option.label + ' ' + groupCount(summary.data, option.value) : option.label}
                   selected={filters.group === option.value}
                   onPress={() => updateFilters({
                     group: option.value,
@@ -157,6 +150,7 @@ export default function AdminIncidentsScreen() {
                   nativeID="admin-incident-search"
                   accessibilityLabel="Buscar incidencias por título o dirección"
                   value={filters.query}
+                  maxLength={200}
                   onChangeText={(query) => updateFilters({ query })}
                   placeholder="Buscar por título o dirección"
                   placeholderTextColor={theme.muted}
@@ -204,7 +198,7 @@ export default function AdminIncidentsScreen() {
             {state.status === 'success' && (
               <View style={styles.panelHeader}>
                 <Text accessibilityLiveRegion="polite" style={{ color: theme.muted, fontVariant: ['tabular-nums'] }}>
-                  {visible.length === 1 ? '1 incidencia' : `${visible.length} incidencias`}
+                  {total === 1 ? '1 incidencia' : total + ' incidencias'}
                 </Text>
                 {filtering && (
                   <Pressable nativeID="admin-clear-filters" accessibilityRole="button" onPress={() => updateFilters(initialFilters)} style={styles.action}>
@@ -213,7 +207,7 @@ export default function AdminIncidentsScreen() {
                 )}
               </View>
             )}
-            {state.status === 'loading' && (
+            {state.status === 'loading' && !invalidDates && (
               <View accessibilityRole="progressbar" accessibilityLabel="Cargando incidencias" style={styles.loading}>
                 <Skeleton style={styles.skeleton} />
                 <Skeleton style={styles.skeleton} />
@@ -227,23 +221,27 @@ export default function AdminIncidentsScreen() {
                 </Pressable>
               </View>
             )}
-            {state.status === 'success' && visible.length === 0 && (
+            {(invalidDates || (state.status === 'success' && visible.length === 0)) && (
               <View style={styles.empty}>
                 <Text style={[styles.cardTitle, { color: theme.text }]}>
-                  {invalidDates ? 'Revisa el intervalo de fechas' : incidents.length ? 'Ninguna incidencia coincide' : 'Todavía no hay incidencias'}
+                  {invalidDates ? 'Revisa el intervalo de fechas' : filtering ? 'Ninguna incidencia coincide' : 'Todavía no hay incidencias'}
                 </Text>
               </View>
             )}
             <View style={styles.grid}>
-              {visible.slice(0, limit).map((incident, index) => (
+              {visible.map((incident, index) => (
                 <Reveal key={incident.id} index={index % GRID_BATCH} distance={14} style={{ width: cardWidth }}>
                   <IncidentCard incident={incident} />
                 </Reveal>
               ))}
             </View>
-            {visible.length > limit && (
-              <Pressable accessibilityRole="button" onPress={() => setLimit((current) => current + GRID_BATCH)} style={[styles.action, styles.more]}>
-                <Text style={[styles.actionText, { color: theme.accent }]}>Mostrar más incidencias</Text>
+            {page?.moreError && <Text accessibilityRole="alert" style={[styles.meta, { color: theme.danger }]}>{page.moreError}</Text>}
+            {page?.nextPageToken && (
+              <Pressable accessibilityRole="button" accessibilityState={{ busy: page.loadingMore }} disabled={page.loadingMore}
+                onPress={loadMore} style={[styles.action, styles.more]}>
+                <Text style={[styles.actionText, { color: theme.accent }]}>
+                  {page.loadingMore ? 'Cargando incidencias…' : page.moreError ? 'Reintentar' : 'Mostrar más incidencias'}
+                </Text>
               </Pressable>
             )}
           </View>

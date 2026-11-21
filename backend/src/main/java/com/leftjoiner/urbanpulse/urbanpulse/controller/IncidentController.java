@@ -1,11 +1,16 @@
 package com.leftjoiner.urbanpulse.urbanpulse.controller;
 
+import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentCursorResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentRequest;
+import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentSummaryResponse;
+import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentCategory;
+import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus;
 import com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatusGroup;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentDetailResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentListItemResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentResponse;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.ProblemResponseSchema;
+import com.leftjoiner.urbanpulse.urbanpulse.service.IncidentReadService;
 import com.leftjoiner.urbanpulse.urbanpulse.service.IncidentService;
 import com.leftjoiner.urbanpulse.urbanpulse.security.UrbanPulsePrincipal;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -16,6 +21,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +35,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class IncidentController {
     private final IncidentService incidentService;
+    private final IncidentReadService incidentReadService;
     private final com.leftjoiner.urbanpulse.urbanpulse.service.IncidentMapService incidentMapService;
 
     @Operation(summary = "Crear una incidencia", description = "Registra una incidencia del ciudadano autenticado. "
@@ -51,6 +58,33 @@ public class IncidentController {
     public ResponseEntity<IncidentResponse> create(@Valid @RequestBody IncidentRequest request,
             @AuthenticationPrincipal UrbanPulsePrincipal principal) {
         return ResponseEntity.status(HttpStatus.CREATED).body(incidentService.create(request, principal.getId()));
+    }
+
+    @Operation(summary = "Listar incidencias accesibles por cursor",
+            description = "Aplica filtros antes de paginar. Envía nextPageToken como pageToken para continuar con los mismos filtros. "
+                    + "since es inclusivo y until es exclusivo. includeTotal devuelve el total filtrado en la primera página.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping
+    public IncidentCursorResponse list(@RequestParam(defaultValue = "12") int size,
+                                       @RequestParam(required = false) String pageToken,
+                                       @RequestParam(required = false) IncidentCategory category,
+                                       @RequestParam(name = "status", required = false) List<IncidentStatus> statuses,
+                                       @RequestParam(name = "q", required = false) String text,
+                                       @RequestParam(required = false) Instant since,
+                                       @RequestParam(required = false) Instant until,
+                                       @RequestParam(defaultValue = "false") boolean includeTotal,
+                                       @AuthenticationPrincipal UrbanPulsePrincipal principal) {
+        return incidentReadService.list(principal, size, pageToken, category,
+                statuses == null ? List.of() : statuses, text, since, until, includeTotal);
+    }
+
+    @Operation(summary = "Resumir las incidencias accesibles",
+            description = "Devuelve el total y los recuentos por estado. Con zone añade categorías y actividad de los últimos 60 días.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/summary")
+    public IncidentSummaryResponse summary(@RequestParam(required = false) String zone,
+                                           @AuthenticationPrincipal UrbanPulsePrincipal principal) {
+        return incidentReadService.summary(principal, zone);
     }
 
     @Operation(

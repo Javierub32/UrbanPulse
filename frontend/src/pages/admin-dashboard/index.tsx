@@ -5,10 +5,11 @@ import { Pressable, ScrollView, Text, View, useColorScheme, useWindowDimensions,
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { useAuth } from '@/context/AuthContext';
+import { useIncidents, useIncidentSummary } from '@/pages/incidents/hooks/use-incidents';
 import { categories } from '@/pages/report/services/report-service';
 import type { IncidentListItem } from '@/types/incidents';
 import { ActivityChart } from './activity-chart';
-import { buildSeries, greeting, relativeTime, share, summarize } from './analytics';
+import { buildSeries, greeting, groupCount, groupStatuses, relativeTime, share } from './analytics';
 import { monotonePath } from './chart-geometry';
 import { useAdminIncidents } from './admin-incidents-context';
 import { Ping, Reveal, Skeleton, useFocusProgress } from './motion';
@@ -212,16 +213,24 @@ function LoadingState({ wide }: { wide: boolean }) {
 export default function AdminDashboard() {
   const theme = useAdminTheme();
   const { user } = useAuth();
-  const { state, retry } = useAdminIncidents();
+  const { revision } = useAdminIncidents();
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+  const { state, retry } = useIncidentSummary(zone, revision);
+  const { state: pending, retry: retryPending } = useIncidents({ size: 5, statuses: groupStatuses.pending }, true, revision);
   const { width } = useWindowDimensions();
-  const incidents = useMemo(() => (state.status === 'success' ? state.data : []), [state]);
-  const summary = useMemo(() => summarize(incidents), [incidents]);
-  const week = useMemo(() => buildSeries(incidents, 7), [incidents]);
-  const fortnight = useMemo(() => buildSeries(incidents, 14), [incidents]);
+  const summary = state.status === 'success' ? state.data : null;
+  const week = useMemo(() => buildSeries(summary?.byDay ?? {}, 7), [summary]);
+  const fortnight = useMemo(() => buildSeries(summary?.byDay ?? {}, 14), [summary]);
+  const byCategory = useMemo(() => Object.entries(summary?.byCategory ?? {})
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value)), [summary]);
+  const total = summary?.total ?? 0;
+  const inProgress = summary ? groupCount(summary, 'inProgress') : 0;
+  const finished = summary ? groupCount(summary, 'finished') : 0;
   const wide = width >= 1260;
   const firstName = user?.name.trim().split(/\s+/)[0] || 'operador';
   const today = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-  const pendingCount = summary.pending.length;
+  const pendingCount = summary ? groupCount(summary, 'pending') : 0;
   const subtitle = state.status !== 'success'
     ? 'Consulta el estado de las incidencias de la ciudad.'
     : pendingCount === 0 ? 'Todo al día: no hay incidencias pendientes de atención.'
@@ -259,38 +268,45 @@ export default function AdminDashboard() {
       ) : (
         <>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-            <Metric order={0} label="Total" value={summary.total} detail="Incidencias registradas" footer={{ kind: 'spark', values: fortnight.days.map((day) => day.count) }} />
-            <Metric order={1} label="Pendientes" value={pendingCount} detail="Registradas o reabiertas" footer={{ kind: 'share', percent: share(pendingCount, summary.total) }} attention={pendingCount > 0} />
-            <Metric order={2} label="En gestión" value={summary.inProgress.length} detail="Validadas, asignadas o en curso" footer={{ kind: 'share', percent: share(summary.inProgress.length, summary.total) }} />
-            <Metric order={3} label="Finalizadas" value={summary.finished.length} detail="Resueltas, cerradas o rechazadas" footer={{ kind: 'share', percent: share(summary.finished.length, summary.total) }} />
+            <Metric order={0} label="Total" value={total} detail="Incidencias registradas" footer={{ kind: 'spark', values: fortnight.days.map((day) => day.count) }} />
+            <Metric order={1} label="Pendientes" value={pendingCount} detail="Registradas o reabiertas" footer={{ kind: 'share', percent: share(pendingCount, total) }} attention={pendingCount > 0} />
+            <Metric order={2} label="En gestión" value={inProgress} detail="Validadas, asignadas o en curso" footer={{ kind: 'share', percent: share(inProgress, total) }} />
+            <Metric order={3} label="Finalizadas" value={finished} detail="Resueltas, cerradas o rechazadas" footer={{ kind: 'share', percent: share(finished, total) }} />
             <Metric order={4} label="Últimos 7 días" value={week.total} detail="Incidencias nuevas" footer={{ kind: 'delta', delta: week.delta }} />
           </View>
 
           <View style={{ flexDirection: wide ? 'row' : 'column', gap: 20, alignItems: 'stretch' }}>
             <Card nativeID="admin-attention-card" order={6} style={{ flex: wide ? 1.1 : undefined, minWidth: 0 }}>
               <CardTitle title="Pendientes de atención" hint="Incidencias registradas o reabiertas" action={<Link href="/operator/incidents" style={{ color: theme.accent, fontSize: 13, fontWeight: '700' }}>Ver todas</Link>} />
-              {pendingCount === 0 ? (
+              {pending.status === 'loading' ? <Skeleton style={{ height: 72 }} /> : pending.status === 'error' ? (
+                <View style={{ gap: 8 }}>
+                  <Text accessibilityRole="alert" style={{ color: theme.muted }}>{pending.message}</Text>
+                  <Pressable accessibilityRole="button" onPress={retryPending}>
+                    <Text style={{ color: theme.accent, fontWeight: '700' }}>Reintentar</Text>
+                  </Pressable>
+                </View>
+              ) : pending.data.items.length === 0 ? (
                 <View style={{ paddingVertical: 42, gap: 6 }}>
                   <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700' }}>Todo al día</Text>
                   <Text style={{ color: theme.muted, fontSize: 13 }}>No hay incidencias registradas o reabiertas pendientes.</Text>
                 </View>
               ) : (
-                <View>{summary.pending.slice(0, 5).map((incident) => <IncidentRow key={incident.id} incident={incident} />)}</View>
+                <View>{pending.data.items.map((incident) => <IncidentRow key={incident.id} incident={incident} />)}</View>
               )}
             </Card>
             <Reveal index={7} style={{ flex: wide ? 1.4 : undefined, minWidth: 0 }}>
-              <ActivityChart incidents={incidents} />
+              <ActivityChart byDay={state.data.byDay} />
             </Reveal>
           </View>
 
           <View style={{ flexDirection: wide ? 'row' : 'column', gap: 20, alignItems: 'stretch' }}>
             <Card nativeID="admin-card-status" order={8} style={{ flex: wide ? 1 : undefined, minWidth: 0 }}>
               <CardTitle title="Reparto por estado" hint="Cómo se distribuye el trabajo" />
-              <StatusBreakdown pending={pendingCount} inProgress={summary.inProgress.length} finished={summary.finished.length} total={summary.total} />
+              <StatusBreakdown pending={pendingCount} inProgress={inProgress} finished={finished} total={total} />
             </Card>
             <Card nativeID="admin-card-categories" order={9} style={{ flex: wide ? 1 : undefined, minWidth: 0 }}>
               <CardTitle title="Categorías más frecuentes" hint="Dónde se concentran los avisos" />
-              <CategoryBreakdown items={summary.byCategory} />
+              <CategoryBreakdown items={byCategory} />
             </Card>
           </View>
         </>

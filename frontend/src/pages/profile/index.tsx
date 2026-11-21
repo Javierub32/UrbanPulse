@@ -6,20 +6,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassSurface } from '@/components/glass-surface';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/hooks/use-theme';
-import { useIncidents } from '@/pages/incidents/hooks/use-incidents';
-import { statusGroup } from '@/pages/incidents/incident-filters';
+import { useIncidentSummary } from '@/pages/incidents/hooks/use-incidents';
+import { activeStatuses, resolvedStatuses } from '@/pages/incidents/incident-filters';
 import type { UserRole } from '@/types/auth';
 
 const roles: Record<UserRole, string> = { CITIZEN: 'Ciudadano', OPERATOR: 'Operador', TECHNICIAN: 'Técnico', ADMINISTRATOR: 'Administrador', ANALYST: 'Analista' };
 
 function CitizenStats() {
   const t = useTheme();
-  const { state, retry } = useIncidents();
-  const data = state.status === 'success' ? state.data : [];
+  const { state, retry } = useIncidentSummary();
+  const data = state.status === 'success' ? state.data : null;
+  const count = (statuses: string[]) => statuses.reduce((sum, status) => sum + (data?.byStatus[status] ?? 0), 0);
   const stats = [
-    { label: 'Publicados', value: data.length, color: t.accent },
-    { label: 'En proceso', value: data.filter(item => statusGroup(item.status) === 'active').length, color: t.warning },
-    { label: 'Resueltos', value: data.filter(item => statusGroup(item.status) === 'resolved').length, color: t.success },
+    { label: 'Publicados', value: data?.total ?? 0, color: t.accent },
+    { label: 'En proceso', value: count(activeStatuses), color: t.warning },
+    { label: 'Resueltos', value: count(resolvedStatuses), color: t.success },
   ];
   return <View style={styles.section}>
     <Text accessibilityRole="header" style={[styles.sectionTitle, { color: t.ink }]}>Tu actividad</Text>
