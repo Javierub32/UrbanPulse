@@ -4,11 +4,11 @@ import { StyleSheet } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { features, type MapProps } from '../map-types';
 
-export default function IncidentMap({ items, onLoaded, onError, onSelectIncident, onViewport, onSelectCluster }: MapProps) {
+export default function IncidentMap({ items, mapStyle, bottomInset, onLoaded, onError, onSelectIncident, onViewport, onSelectCluster }: MapProps) {
   const camera = useRef<CameraRef>(null);
   const zoom = useRef(12.5);
   return <MapLibreMap accessibilityLabel="Mapa interactivo de incidencias en Málaga"
-    mapStyle="https://tiles.openfreemap.org/styles/liberty" onDidFinishLoadingMap={onLoaded}
+    mapStyle={mapStyle} attributionPosition={{ left: 10, bottom: bottomInset + 10 }} onDidFinishLoadingMap={onLoaded}
     onDidFailLoadingMap={onError} style={StyleSheet.absoluteFill}
     onRegionDidChange={event => {
       const { bounds: [west, south, east, north], zoom: z } = event.nativeEvent;

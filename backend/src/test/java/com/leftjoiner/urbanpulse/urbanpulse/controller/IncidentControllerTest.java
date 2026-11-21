@@ -94,7 +94,7 @@ class IncidentControllerTest {
         UUID id = UUID.randomUUID();
         when(service.listAccessibleIncidents(any())).thenReturn(List.of(
                 new IncidentListItemResponse(id, "Farola", IncidentCategory.STREET_LIGHTING,
-                        IncidentStatus.REPORTED, null, 40.4, -3.7)));
+                        IncidentStatus.REPORTED, null, 40.4, -3.7, "Calle Prueba 1")));
 
         mockMvc.perform(get("/api/incidents/public")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/incidents/public").with(SecurityMockMvcRequestPostProcessors.authentication(citizen())).header("Origin", "http://localhost:8081"))
@@ -102,7 +102,8 @@ class IncidentControllerTest {
                 .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:8081"))
                 .andExpect(jsonPath("$[0].id").value(id.toString()))
                 .andExpect(jsonPath("$[0].latitude").value(40.4))
-                .andExpect(jsonPath("$[0].longitude").value(-3.7));
+                .andExpect(jsonPath("$[0].longitude").value(-3.7))
+                .andExpect(jsonPath("$[0].normalizedAddress").value("Calle Prueba 1"));
         verify(service).listAccessibleIncidents(any());
     }
 

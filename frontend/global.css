@@ -1,3 +1,38 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+:root { --font-interface: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Geist", sans-serif; }
+/* Cristal de la navegación ciudadana, con alternativa sólida accesible. */
+.citizen-glass { background-image: linear-gradient(155deg, rgba(255,255,255,.35), rgba(255,255,255,0) 46%, rgba(255,255,255,.08)); backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%); }
+.citizen-liquid { position: absolute !important; inset: 0; pointer-events: none; --lq-tint: rgba(220, 242, 232, .45); --lq-tint-deep: rgba(230, 246, 240, .25); }
+@media (prefers-color-scheme: dark) { .citizen-liquid { --lq-tint: rgba(28, 45, 51, .65); --lq-tint-deep: rgba(20, 35, 39, .6); } .citizen-glass { background-image: linear-gradient(155deg, rgba(205,255,240,.10), transparent 55%); } }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .citizen-glass { background-color: #f8fcfa !important; }
+  @media (prefers-color-scheme: dark) { .citizen-glass { background-color: #1b2b31 !important; } }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .citizen-liquid { display: none !important; }
+  .citizen-glass { backdrop-filter: none; -webkit-backdrop-filter: none; background-image: none; background-color: #f8fcfa !important; }
+  @media (prefers-color-scheme: dark) { .citizen-glass { background-color: #1b2b31 !important; } }
+}
+
+.incident-map-top-fade {
+  mask-image: linear-gradient(to bottom, transparent, black 35%, black 52%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 35%, black 52%, transparent);
+}
+.incident-map .maplibregl-ctrl-bottom-left {
+  bottom: var(--incident-map-bottom-inset, 0px);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .incident-map-top-fade { --map-edge-blur: none; }
+  .incident-map-progressive-blur { display: none; }
+}
+
+/* Ruedas de hora para web; en iOS se utiliza el selector nativo. */
+.time-wheel { position: relative; display: flex; justify-content: center; height: 220px; width: 100%; max-width: 280px; margin: 0 auto; border-radius: 18px; overflow: hidden; }
+.time-wheel-highlight { position: absolute; left: 12px; right: 12px; top: 88px; height: 44px; border-radius: 10px; pointer-events: none; }
+.time-wheel-column { position: relative; flex: 1; max-width: 125px; height: 220px; overflow-y: auto; padding: 88px 0; box-sizing: border-box; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch; mask-image: linear-gradient(to bottom, transparent, black 26%, black 74%, transparent); }
+.time-wheel-column::-webkit-scrollbar { display: none; }
+.time-wheel-column:focus-visible { outline: 2px solid #117d73; outline-offset: -3px; border-radius: 12px; }
+.time-wheel-item { display: flex; width: 100%; height: 44px; align-items: center; justify-content: center; border: 0; background: transparent; font-family: inherit; font-size: 23px; line-height: 44px; font-variant-numeric: tabular-nums; scroll-snap-align: center; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .time-wheel-column { scroll-behavior: auto; } }
