@@ -23,18 +23,17 @@ export function useTicketAnimation() {
     return () => closeCue.removeListener(id);
   }, [closeCue]);
 
-  function start(onComplete: () => void, scrollDelay = 0, onDeparture?: () => void) {
+  function start(onComplete: () => void, onDeparture?: () => void) {
     setActive(true);
     closeCallback.current = onDeparture ?? null;
     const hideButton = Animated.timing(button, { toValue: 0, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: true });
     animation.current = reduceMotion
       ? Animated.sequence([hideButton, Animated.timing(fade, { toValue: 0, duration: 120, useNativeDriver: true })])
       : Animated.sequence([
-          Animated.delay(scrollDelay),
           hideButton,
-          Animated.timing(tear, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
+          Animated.timing(tear, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
           Animated.parallel([
-            Animated.timing(fall, { toValue: 1, duration: 560, easing: Easing.in(Easing.cubic), useNativeDriver: false }),
+            Animated.timing(fall, { toValue: 1, duration: 560, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
             Animated.sequence([
               Animated.delay(180),
               Animated.timing(ticket, { toValue: 0.04, duration: 110, easing: Easing.out(Easing.quad), useNativeDriver: true }),

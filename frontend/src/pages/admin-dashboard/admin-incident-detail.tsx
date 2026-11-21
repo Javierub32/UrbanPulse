@@ -1,328 +1,633 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Armchair, ArrowDown, ArrowLeft, Brush, CircleAlert, Flag, Lightbulb, MapPin, Minus, Route, Shapes, TrafficCone, Trash2, Trees, TriangleAlert, UserRound } from 'lucide-react-native';
+import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type ViewStyle } from 'react-native';
+import Animated, { Easing, interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
-import { getIncidentDetail } from '@/pages/incident-detail/services/incident-detail-service';
+import { GlassSurface } from '@/components/glass-surface';
+import { TicketPhoto } from '@/components/incident-ticket';
+import { reviewHistoryLabel } from '@/pages/incident-detail/review-history';
+import { TicketDetail } from '@/pages/incidents/components/ticket-stack';
+import { parseDate } from '@/pages/incidents/incident-filters';
+import LocationMap from '@/pages/report/components/location-map';
 import { categories } from '@/pages/report/services/report-service';
-import { ApiError } from '@/services/api-client';
 import type { IncidentDetail } from '@/types/incidents';
-import { relativeTime } from './analytics';
+
+import { ADMIN_COMPACT_SIDEBAR_INSET } from './admin-shell';
+import { GlassFilterMenu } from './glass-filter-menu';
 import { incidentStatus, incidentStatusTone } from './incident-status';
 import { Reveal, Skeleton } from './motion';
-import { reviewHistoryLabel } from '@/pages/incident-detail/review-history';
-import { submitReview, type ReviewCommand } from './review-service';
+import type { ReviewCommand } from './review-service';
 import { StatusPill } from './status-pill';
 import { useAdminTheme } from './theme';
+import { useIncidentReview } from './use-incident-review';
 
-type State = { status: 'loading' } | { status: 'error'; message: string; retry: boolean } | { status: 'success'; data: IncidentDetail };
-type Theme = ReturnType<typeof useAdminTheme>;
+const CONTENT_MAX_WIDTH = 1460;
+const MODULE_GAP = 20;
+const HISTORY_WIDTH = 272;
+const LOCATION_WIDTH = 234;
+const MODULE_ENTER_DURATION = 880;
 
 const priorities = [
-  { value: 'LOW', label: 'Baja' },
-  { value: 'MEDIUM', label: 'Media' },
-  { value: 'HIGH', label: 'Alta' },
-  { value: 'CRITICAL', label: 'Crítica' },
-];
-const atmosphericLabels: Record<string, string> = { precipitation: 'Precipitación', pm2_5: 'Partículas PM2.5', pm10: 'Partículas PM10', nitrogen_dioxide: 'Dióxido de nitrógeno' };
-const confirmations: Record<ReviewCommand['action'], string> = {
-  edit: 'Cambios guardados.',
-  'request-information': 'Solicitud de información registrada.',
-  reject: 'Incidencia rechazada.',
-  validate: 'Incidencia validada.',
+  { value: 'LOW', label: 'Baja', icon: ArrowDown, tone: 'success' },
+  { value: 'MEDIUM', label: 'Media', icon: Minus, tone: 'accent' },
+  { value: 'HIGH', label: 'Alta', icon: TriangleAlert, tone: 'warning' },
+  { value: 'CRITICAL', label: 'Crítica', icon: CircleAlert, tone: 'danger' },
+] as const;
+const categoryIcons = {
+  PUBLIC_ROAD: Route,
+  STREET_LIGHTING: Lightbulb,
+  TRAFFIC: TrafficCone,
+  GREEN_AREAS: Trees,
+  CLEANING: Brush,
+  WASTE: Trash2,
+  STREET_FURNITURE: Armchair,
+  OTHER: Shapes,
 };
+const categoryOptions = categories.map((option) => ({ ...option, icon: categoryIcons[option.value] }));
 
-const parseDate = (value: string | null) => {
-  if (!value) return null;
-  const parsed = new Date(value.endsWith('Z') || /[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
+type EditField = 'category' | 'priority' | 'location';
+type Draft = { category: string; priority: string; latitude: string; longitude: string };
+type ReasonAction = 'reject' | 'request-information';
+type Editor =
+  | { kind: 'fields'; field: EditField; values: Draft; manualLocation?: boolean; error?: string }
+  | { kind: 'reason'; action: ReasonAction; reason: string; error?: string };
+
 const formatDate = (value: string | null) => parseDate(value)?.toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' }) ?? 'No disponible';
-const categoryLabel = (value: string | null) => categories.find((item) => item.value === value)?.label ?? value ?? 'Sin categoría';
-const priorityLabel = (value: string | null) => priorities.find((item) => item.value === value)?.label ?? value ?? 'Sin prioridad';
 
-function historyLabel(entry: IncidentDetail['history'][number]) {
-  const review = reviewHistoryLabel(entry.action);
-  if (review) return review;
-  return entry.previousStatus ? `${incidentStatus(entry.previousStatus)} → ${incidentStatus(entry.status)}` : incidentStatus(entry.status);
+function draftFrom(incident: IncidentDetail): Draft {
+  return {
+    category: incident.category ?? '',
+    priority: incident.priority ?? '',
+    latitude: incident.latitude == null ? '' : String(incident.latitude),
+    longitude: incident.longitude == null ? '' : String(incident.longitude),
+  };
+}
+
+function coordinates(latitude: string, longitude: string) {
+  if (!latitude.trim() || !longitude.trim()) return null;
+  const lat = Number(latitude.trim().replace(',', '.'));
+  const lon = Number(longitude.trim().replace(',', '.'));
+  return Number.isFinite(lat) && Math.abs(lat) <= 90 && Number.isFinite(lon) && Math.abs(lon) <= 180
+    ? { latitude: lat, longitude: lon }
+    : null;
 }
 
 export default function AdminIncidentDetailScreen() {
   const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
-  return <AdminIncidentDetail key={id} id={id} from={from === 'map' ? 'map' : 'incidents'} />;
+  const incidentId = typeof id === 'string' && id ? id : undefined;
+  return <AdminIncidentDetail key={incidentId ?? 'missing'} id={incidentId} fromMap={from === 'map'} />;
 }
 
-function AdminIncidentDetail({ id, from }: { id: string; from: 'map' | 'incidents' }) {
+function AdminIncidentDetail({ id, fromMap }: { id?: string; fromMap: boolean }) {
   const theme = useAdminTheme();
   const router = useRouter();
-  // Vuelve a la pantalla de origen; si se entró por enlace directo, a la sección de la que procede.
-  const back = () => {
+  const { width } = useWindowDimensions();
+  const review = useIncidentReview(id);
+  const { incident, busy, locked, loading, readError, notice, actionError } = review;
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const [openMenu, setOpenMenu] = useState<Exclude<EditField, 'location'> | null>(null);
+  const fieldEditor = editor?.kind === 'fields' ? editor : null;
+  const reasonEditor = editor?.kind === 'reason' ? editor : null;
+  const padding = width < 660 ? 14 : width < 1100 ? 24 : 34;
+  const contentWidth = Math.min(CONTENT_MAX_WIDTH, width - ADMIN_COMPACT_SIDEBAR_INSET) - padding * 2;
+  const historyAside = contentWidth >= 1000;
+  const mainWidth = contentWidth - (historyAside ? HISTORY_WIDTH + MODULE_GAP : 0);
+  const locationAside = mainWidth >= 680;
+  const overviewWidth = mainWidth - (locationAside ? LOCATION_WIDTH + MODULE_GAP : 0);
+  const photoAside = overviewWidth >= 420;
+  const ticketAside = mainWidth >= 618;
+  const showFields = review.reviewable && !reasonEditor;
+  const canEdit = showFields && !locked;
+  const savedLatitude = incident?.latitude;
+  const savedLongitude = incident?.longitude;
+  const draftLatitude = fieldEditor?.values.latitude;
+  const draftLongitude = fieldEditor?.values.longitude;
+  const point = useMemo(() => coordinates(draftLatitude ?? '', draftLongitude ?? '')
+    ?? (savedLatitude != null && savedLongitude != null ? { latitude: savedLatitude, longitude: savedLongitude } : null),
+  [draftLatitude, draftLongitude, savedLatitude, savedLongitude]);
+
+  function back() {
     if (router.canGoBack()) router.back();
-    else router.replace(from === 'map' ? '/operator/map' : '/operator/incidents');
-  };
-  const [attempt, setAttempt] = useState(0);
-  const [state, setState] = useState<State>({ status: 'loading' });
-  const [notice, setNotice] = useState('');
-  const reload = useCallback(() => setAttempt((value) => value + 1), []);
+    else router.replace(fromMap ? '/operator/map' : '/operator/incidents');
+  }
 
-  useEffect(() => {
-    const controller = new AbortController();
-    let active = true;
-    if (!id || Array.isArray(id)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setState({ status: 'error', message: 'Identificador de incidencia no válido.', retry: false });
-      return () => controller.abort();
-    }
-    getIncidentDetail(id, controller.signal).then((data) => {
-      if (active) setState({ status: 'success', data });
-    }).catch((error: unknown) => {
-      if (!active) return;
-      const status = error instanceof ApiError ? error.status : 0;
-      const message = status === 404 ? 'No se ha encontrado la incidencia.'
-        : status === 403 ? 'No tienes permiso para consultar esta incidencia.'
-          : status === 400 ? 'Identificador de incidencia no válido.'
-            : error instanceof Error ? error.message : 'No se ha podido cargar la incidencia.';
-      setState({ status: 'error', message, retry: ![400, 403, 404].includes(status) });
+  function openField(field: EditField, patch?: Partial<Draft>) {
+    if (!incident || !canEdit) return;
+    review.clearFeedback();
+    setEditor({
+      kind: 'fields',
+      field,
+      values: { ...(fieldEditor?.values ?? draftFrom(incident)), ...patch },
+      manualLocation: field === 'location' && (!patch || fieldEditor?.manualLocation),
     });
-    return () => { active = false; controller.abort(); };
-  }, [id, attempt]);
+  }
 
-  const onReviewed = useCallback((message: string) => { setNotice(message); reload(); }, [reload]);
+  function patchDraft(patch: Partial<Draft>) {
+    setEditor((current) => current?.kind === 'fields'
+      ? { ...current, error: undefined, values: { ...current.values, ...patch } }
+      : current);
+  }
 
-  return (
-    <View nativeID="admin-canvas" style={{ flex: 1 }}>
-      <ScrollView style={{ flex: 1, backgroundColor: 'transparent' }} contentContainerStyle={{ width: '100%', maxWidth: 1180, alignSelf: 'center', padding: 42, paddingTop: 30, paddingBottom: 64, gap: 22 }} keyboardShouldPersistTaps="handled">
-        <Pressable nativeID="admin-detail-back" accessibilityRole="button" onPress={back} style={{ alignSelf: 'flex-start', minHeight: 40, paddingHorizontal: 14, borderRadius: 999, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }}>
-          <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '700' }}>{from === 'map' ? '← Mapa' : '← Incidencias'}</Text>
-        </Pressable>
+  function cancelEditor() {
+    setEditor(null);
+    review.clearFeedback();
+  }
 
-        {!!notice && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ color: theme.success, fontWeight: '700' }}>{notice}</Text>}
+  async function submit(command: ReviewCommand) {
+    if (await review.submit(command)) setEditor(null);
+  }
 
-        {state.status === 'loading' && (
-          <View accessibilityRole="progressbar" accessibilityLabel="Cargando incidencia" style={{ gap: 14 }}>
-            <Skeleton style={{ height: 44, width: 420, borderRadius: 12 }} />
-            <Skeleton style={{ height: 280, borderRadius: 20 }} />
+  function saveFields() {
+    if (!fieldEditor) return;
+    const { values } = fieldEditor;
+    const point = coordinates(values.latitude, values.longitude);
+    if (!values.category) {
+      setEditor({ ...fieldEditor, field: 'category', error: 'Selecciona una categoría para guardar.' });
+    } else if (!values.priority) {
+      setEditor({ ...fieldEditor, field: 'priority', error: 'Selecciona una prioridad para guardar.' });
+    } else if (!point) {
+      setEditor({ ...fieldEditor, field: 'location', manualLocation: true, error: 'Introduce una latitud entre −90 y 90 y una longitud entre −180 y 180.' });
+    } else {
+      void submit({ action: 'edit', body: { category: values.category, priority: values.priority, ...point } });
+    }
+  }
+
+  function openReason(action: ReasonAction) {
+    if (locked || fieldEditor) return;
+    review.clearFeedback();
+    setEditor({ kind: 'reason', action, reason: '' });
+  }
+
+  function sendReason() {
+    if (!reasonEditor) return;
+    const reason = reasonEditor.reason.trim();
+    if (!reason) {
+      setEditor({ ...reasonEditor, error: 'Escribe un motivo.' });
+      return;
+    }
+    void submit({ action: reasonEditor.action, body: { reason } });
+  }
+
+  const editActions = fieldEditor && (
+    <>
+      <InlineError message={fieldEditor.error || actionError} />
+      <View style={styles.buttonRow}>
+        <ActionButton id="admin-review-edit" label="Guardar cambios" tone="primary" busy={busy === 'edit'} disabled={locked} onPress={saveFields} />
+        <ActionButton label="Cancelar" disabled={locked} onPress={cancelEditor} />
+      </View>
+    </>
+  );
+
+  if (!incident) {
+    return (
+      <DetailScroll padding={padding}>
+        <DetailHeading title="Incidencia" backLabel={fromMap ? 'Volver al mapa' : 'Volver a Incidencias'} onBack={back} />
+        {loading && (
+          <View accessibilityRole="progressbar" accessibilityLabel="Cargando incidencia" style={styles.moduleGroup}>
+            <Skeleton style={styles.shortSkeleton} />
+            <Skeleton style={styles.detailSkeleton} />
           </View>
         )}
+        {readError && <ReadFailure message={readError.message} retryable={readError.retryable} retry={review.refresh} />}
+      </DetailScroll>
+    );
+  }
 
-        {state.status === 'error' && (
-          <Card id="admin-card-detail-error">
-            <Text accessibilityRole="alert" style={{ color: theme.text, fontWeight: '700' }}>{state.message}</Text>
-            {state.retry && <Pressable accessibilityRole="button" onPress={reload} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: theme.accent, fontWeight: '700' }}>Reintentar</Text></Pressable>}
-          </Card>
-        )}
+  const category = fieldEditor?.values.category ?? incident.category;
+  const priority = fieldEditor?.values.priority ?? incident.priority ?? '';
+  const priorityLabel = priority || 'Sin definir';
+  const categoryLabel = categories.find((item) => item.value === category)?.label ?? (category || 'Sin categoría');
+  const priorityOptions = priorities.map(({ tone, ...option }) => ({ ...option, color: theme[tone] }));
+  const selectedPriority = priorityOptions.find((item) => item.value === priority);
+  const hasLocationEditor = fieldEditor?.field === 'location';
 
-        {state.status === 'success' && (
-          <>
-            <Reveal index={0}>
-              <View style={{ gap: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <StatusPill status={state.data.status} />
-                  <Text style={{ color: theme.muted, fontSize: 13 }}>{categoryLabel(state.data.category)} · {relativeTime(state.data.registeredAt)}</Text>
-                </View>
-                <Text selectable style={{ color: theme.text, fontSize: 36, lineHeight: 44, fontWeight: '800', letterSpacing: -1.2 }}>{state.data.title?.trim() || 'Incidencia sin título'}</Text>
-              </View>
-            </Reveal>
+  const ticketAndAssignments = (
+    <View style={[styles.moduleGroup, ticketAside && styles.across]}>
+      <View style={[styles.ticketColumn, ticketAside && styles.ticketColumnAside]}>
+        <PinnedTicket incident={incident} retry={review.refresh} />
+      </View>
+      <Reveal from="bottom" index={3} distance={66} duration={MODULE_ENTER_DURATION} style={ticketAside && styles.grow}>
+        <DetailCard id="admin-card-assignments" title="Asignaciones" icon={<UserRound size={17} color={theme.muted} aria-hidden />}>
+          <Text style={[styles.secondary, { color: theme.muted }]}>Las asignaciones aún no están disponibles.</Text>
+        </DetailCard>
+      </Reveal>
+    </View>
+  );
 
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 22, alignItems: 'flex-start' }}>
-              <View style={{ flexGrow: 1.6, flexBasis: 460, minWidth: 0, gap: 22 }}>
-                <Reveal index={1}>
-                  <Card id="admin-card-description" title="Descripción">
-                    <Text selectable style={{ color: theme.text, fontSize: 15, lineHeight: 22 }}>{state.data.description?.trim() || 'Sin descripción.'}</Text>
-                  </Card>
+  return (
+    <DetailScroll padding={padding}>
+      <DetailHeading
+        title={incident.title?.trim() || 'Incidencia sin título'}
+        status={incident.status}
+        backLabel={fromMap ? 'Volver al mapa' : 'Volver a Incidencias'}
+        onBack={back}
+      />
+      {readError && <ReadFailure message={readError.message} retryable={readError.retryable} retry={review.refresh} />}
+
+      <View style={[styles.moduleGroup, historyAside && styles.across]}>
+        <View style={[styles.moduleGroup, historyAside && styles.grow]}>
+          <View style={[styles.moduleGroup, styles.overviewLayer, locationAside && styles.alignedColumns]}>
+            <View style={[styles.moduleGroup, locationAside && styles.grow, openMenu === 'category' && styles.menuLayer]}>
+              <View style={[styles.moduleGroup, styles.fieldLayer, photoAside && styles.across]}>
+                <Reveal from="left" distance={88} duration={MODULE_ENTER_DURATION} style={photoAside && styles.imageAside}>
+                  <GlassSurface nativeID="admin-card-evidence" style={[styles.imageFrame, { backgroundColor: theme.detailGlass, borderColor: theme.detailGlassBorder }]}>
+                    <TicketPhoto style={styles.imageContent} />
+                  </GlassSurface>
                 </Reveal>
-                <Reveal index={2}>
-                  <Card id="admin-card-information" title="Información">
-                    <Field theme={theme} name="Prioridad" value={priorityLabel(state.data.priority)} />
-                    <Field theme={theme} name="Registrada" value={formatDate(state.data.registeredAt)} />
-                    <Field theme={theme} name="Actualizada" value={formatDate(state.data.updatedAt)} />
-                    <Field theme={theme} name="Calle" value={state.data.normalizedAddress || 'No disponible'} />
-                    <Field theme={theme} name="Coordenadas" value={state.data.latitude != null && state.data.longitude != null ? `${state.data.latitude}, ${state.data.longitude}` : 'No disponible'} last />
-                  </Card>
-                </Reveal>
-                <Reveal index={3}>
-                  <Card id="admin-card-atmospheric" title="Datos atmosféricos">
-                    {(state.data.atmosphericData ?? []).length === 0
-                      ? <Text style={{ color: theme.muted }}>No hay datos atmosféricos para esta incidencia.</Text>
-                      : <>
-                          {state.data.atmosphericData.map((reading, index) => (
-                            <Field key={`${reading.key}-${reading.source}-${index}`} theme={theme} name={atmosphericLabels[reading.key] ?? reading.key} value={`${reading.value} ${reading.unit}`} last={index === state.data.atmosphericData.length - 1} />
-                          ))}
-                          <Text style={{ color: theme.muted, fontSize: 11, textAlign: 'right' }}>
-                            {state.data.atmosphericData.some((reading) => reading.source.includes('CAMS ENSEMBLE')) ? 'Fuente: Open-Meteo · Calidad del aire: CAMS ENSEMBLE' : 'Fuente: Open-Meteo'}
-                          </Text>
-                        </>}
-                  </Card>
-                </Reveal>
-              </View>
 
-              <View style={{ flexGrow: 1, flexBasis: 340, minWidth: 0, gap: 22 }}>
-                {state.data.status === 'REPORTED' && (
-                  <Reveal index={1}>
-                    <ReviewCard key={state.data.updatedAt ?? ''} incident={state.data} onReviewed={onReviewed} onError={() => setNotice('')} />
-                  </Reveal>
-                )}
-                <Reveal index={2}>
-                  <Card id="admin-card-history" title="Historial">
-                    {state.data.history.length === 0
-                      ? <Text style={{ color: theme.muted }}>Todavía no hay historial registrado.</Text>
-                      : state.data.history.map((entry, index) => (
-                          <View key={`${entry.changedAt}-${index}`} style={{ flexDirection: 'row', gap: 12 }}>
-                            <View style={{ alignItems: 'center' }}>
-                              <View style={{ width: 10, height: 10, borderRadius: 5, marginTop: 5, backgroundColor: theme[incidentStatusTone(entry.status)] }} />
-                              {index < state.data.history.length - 1 && <View style={{ flex: 1, width: 2, marginTop: 4, backgroundColor: theme.border }} />}
-                            </View>
-                            <View style={{ flex: 1, gap: 3, paddingBottom: 14 }}>
-                              <Text style={{ color: theme.text, fontWeight: '700', fontSize: 14 }}>{historyLabel(entry)}</Text>
-                              {!!entry.reason && <Text selectable style={{ color: theme.text, fontSize: 13 }}>{entry.action === 'INCIDENT_EDITED' ? `Campos modificados: ${entry.reason}` : entry.reason}</Text>}
-                              {!!(entry.actorName || entry.actorId) && <Text style={{ color: theme.muted, fontSize: 12 }}>Realizado por: {entry.actorName || entry.actorId}</Text>}
-                              <Text style={{ color: theme.muted, fontSize: 12 }}>{formatDate(entry.changedAt)}</Text>
-                            </View>
-                          </View>
-                        ))}
-                  </Card>
+                <Reveal from="top" index={1} distance={62} duration={MODULE_ENTER_DURATION} style={[styles.fieldLayer, photoAside && styles.grow]}>
+                  <DetailCard id="admin-card-information" title="Detalles">
+                    {showFields ? (
+                      <View style={[styles.editorLabel, openMenu === 'category' && styles.menuLayer]}>
+                        <Text style={[styles.secondary, { color: theme.muted }]}>Categoría</Text>
+                        <GlassFilterMenu
+                          id="review-category"
+                          label="Categoría"
+                          value={category ?? ''}
+                          options={categoryOptions}
+                          emptyLabel="Sin categoría"
+                          field={{ open: openMenu === 'category', onOpenChange: (open) => setOpenMenu(open ? 'category' : null) }}
+                          disabled={!canEdit}
+                          onChange={(value) => openField('category', { category: value })}
+                        />
+                      </View>
+                    ) : <ValueField label="Categoría" value={categoryLabel} />}
+                    {fieldEditor?.field === 'category' && editActions}
+                    <ValueField label="Registrada" value={formatDate(incident.registeredAt)} />
+                    <ValueField label="Actualizada" value={formatDate(incident.updatedAt)} />
+                  </DetailCard>
                 </Reveal>
               </View>
+
+              <Reveal from="left" index={2} distance={78} duration={MODULE_ENTER_DURATION} style={locationAside && styles.expand}>
+                <DetailCard id="admin-card-description" title="Descripción" style={locationAside ? styles.expand : undefined}>
+                  <Text selectable style={[styles.description, { color: theme.text }]}>{incident.description?.trim() || 'Sin descripción.'}</Text>
+                </DetailCard>
+              </Reveal>
             </View>
-          </>
-        )}
-      </ScrollView>
-    </View>
-  );
-}
 
-function Card({ id, title, children }: { id: string; title?: string; children: ReactNode }) {
-  const theme = useAdminTheme();
-  return (
-    <View nativeID={id} style={{ backgroundColor: theme.surface, borderRadius: 20, borderCurve: 'continuous', padding: 24, gap: 14 }}>
-      {!!title && <Text accessibilityRole="header" style={{ color: theme.text, fontSize: 17, fontWeight: '800', letterSpacing: -0.3 }}>{title}</Text>}
-      {children}
-    </View>
-  );
-}
+            <View style={[styles.moduleGroup, locationAside && styles.locationAside, openMenu === 'priority' && styles.menuLayer]}>
+              <Reveal from="top" index={1} distance={68} duration={MODULE_ENTER_DURATION} style={locationAside && styles.expand}>
+                <DetailCard id="admin-card-location" title="Ubicación" icon={<MapPin size={17} color={theme.muted} aria-hidden />} style={locationAside ? styles.expand : undefined}>
+                  <View nativeID="admin-detail-location-map" style={[styles.mapFrame, { backgroundColor: theme.track }, locationAside && styles.expand]}>
+                    <View style={StyleSheet.absoluteFill}>
+                      <LocationMap
+                        coordinate={point}
+                        height="100%"
+                        showAttribution={false}
+                        onSelect={canEdit ? (coordinate) => openField('location', {
+                          latitude: String(coordinate.latitude),
+                          longitude: String(coordinate.longitude),
+                        }) : undefined}
+                      />
+                    </View>
+                  </View>
+                  {showFields && !(hasLocationEditor && fieldEditor.manualLocation) && (
+                    <ActionButton id="admin-edit-location" label="Editar coordenadas" disabled={locked} onPress={() => openField('location')} />
+                  )}
+                  {hasLocationEditor && (
+                    <>
+                      {fieldEditor.manualLocation && <CoordinateEditor values={fieldEditor.values} disabled={locked} onChange={patchDraft} />}
+                      {editActions}
+                    </>
+                  )}
+                </DetailCard>
+              </Reveal>
 
-function Field({ theme, name, value, last }: { theme: Theme; name: string; value: string; last?: boolean }) {
-  return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, paddingBottom: 10, borderBottomWidth: last ? 0 : 1, borderBottomColor: theme.border }}>
-      <Text style={{ color: theme.muted, fontSize: 13 }}>{name}</Text>
-      <Text selectable style={{ color: theme.text, fontSize: 14, fontWeight: '700', flexShrink: 1, textAlign: 'right' }}>{value}</Text>
-    </View>
-  );
-}
-
-function Choices({ label, options, value, onChange, disabled }: { label: string; options: readonly { value: string; label: string }[]; value: string; onChange: (value: string) => void; disabled: boolean }) {
-  const theme = useAdminTheme();
-  return (
-    <View style={{ gap: 8 }}>
-      <Text style={{ color: theme.muted, fontSize: 12, fontWeight: '700' }}>{label}</Text>
-      <View accessibilityRole="radiogroup" accessibilityLabel={label} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-        {options.map((option) => {
-          const selected = option.value === value;
-          return (
-            <Pressable key={option.value} nativeID={`admin-option-${label}-${option.value}`} accessibilityRole="radio" accessibilityState={{ selected, disabled }} disabled={disabled} onPress={() => onChange(option.value)} style={{ minHeight: 34, paddingHorizontal: 12, borderRadius: 999, justifyContent: 'center', backgroundColor: selected ? theme.accent : theme.surface, borderWidth: 1, borderColor: selected ? theme.accent : theme.border }}>
-              <Text style={{ color: selected ? theme.background : theme.text, fontSize: 12, fontWeight: '700' }}>{option.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-function ReviewCard({ incident, onReviewed, onError }: { incident: IncidentDetail; onReviewed: (message: string) => void; onError: () => void }) {
-  const theme = useAdminTheme();
-  const [category, setCategory] = useState(incident.category ?? '');
-  const [priority, setPriority] = useState(incident.priority ?? '');
-  const [latitude, setLatitude] = useState(String(incident.latitude ?? ''));
-  const [longitude, setLongitude] = useState(String(incident.longitude ?? ''));
-  const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState<ReviewCommand['action'] | null>(null);
-  const [error, setError] = useState('');
-  const inFlight = useRef(false);
-
-  const fail = (message: string) => { setError(message); onError(); };
-
-  const send = async (command: ReviewCommand) => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setBusy(command.action);
-    setError('');
-    try {
-      await submitReview(incident.id, command);
-      onReviewed(confirmations[command.action]);
-    } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 409) onReviewed(cause.message);
-      else {
-        const details = cause instanceof ApiError ? Object.values(cause.fields) : [];
-        fail(details.length ? details.join(' ') : cause instanceof Error ? cause.message : 'No se ha podido completar la acción.');
-      }
-    } finally {
-      inFlight.current = false;
-      setBusy(null);
-    }
-  };
-
-  const save = () => {
-    const lat = Number(latitude.trim().replace(',', '.'));
-    const lon = Number(longitude.trim().replace(',', '.'));
-    if (!category || !priority) return fail('Selecciona la categoría y la prioridad.');
-    if (!latitude.trim() || !longitude.trim() || !Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
-      return fail('Introduce una latitud entre −90 y 90 y una longitud entre −180 y 180.');
-    }
-    void send({ action: 'edit', body: { category, priority, latitude: lat, longitude: lon } });
-  };
-
-  const withReason = (action: 'request-information' | 'reject') => {
-    const text = reason.trim();
-    if (!text) return fail('Introduce un motivo.');
-    void send({ action, body: { reason: text } });
-  };
-
-  const input = { minHeight: 40, paddingHorizontal: 14, borderRadius: 12, color: theme.text, fontSize: 14, backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border };
-
-  return (
-    <Card id="admin-card-review" title="Revisión inicial">
-      <Text style={{ color: theme.muted, fontSize: 13 }}>Corrige los datos si hace falta y decide si la incidencia sigue adelante.</Text>
-      <Choices label="Categoría" options={categories} value={category} onChange={setCategory} disabled={!!busy} />
-      <Choices label="Prioridad" options={priorities} value={priority} onChange={setPriority} disabled={!!busy} />
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        {([['Latitud', latitude, setLatitude], ['Longitud', longitude, setLongitude]] as const).map(([name, value, set]) => (
-          <View key={name} style={{ flex: 1, gap: 6 }}>
-            <Text style={{ color: theme.muted, fontSize: 12, fontWeight: '700' }}>{name}</Text>
-            <TextInput accessibilityLabel={name} inputMode="decimal" editable={!busy} value={value} onChangeText={set} style={input} />
+              <Reveal from="bottom" index={2} distance={64} duration={MODULE_ENTER_DURATION} style={styles.fieldLayer}>
+                <DetailCard id="admin-card-priority" title="Prioridad" icon={<Flag size={17} color={theme.muted} aria-hidden />}>
+                  {showFields ? (
+                    <GlassFilterMenu
+                      id="review-priority"
+                      label="Prioridad"
+                      value={priority}
+                      options={priorityOptions}
+                      emptyLabel={priorityLabel}
+                      field={{ open: openMenu === 'priority', onOpenChange: (open) => setOpenMenu(open ? 'priority' : null) }}
+                      disabled={!canEdit}
+                      onChange={(value) => openField('priority', { priority: value })}
+                    />
+                  ) : (
+                    <View style={styles.cardHeading}>
+                      {selectedPriority && <selectedPriority.icon size={17} color={selectedPriority.color} aria-hidden />}
+                      <Text style={[styles.fieldLabel, { color: theme.text }]}>{selectedPriority?.label ?? priorityLabel}</Text>
+                    </View>
+                  )}
+                  {fieldEditor?.field === 'priority' && editActions}
+                </DetailCard>
+              </Reveal>
+            </View>
           </View>
-        ))}
+
+          {historyAside && ticketAndAssignments}
+        </View>
+
+        <Reveal from="right" index={1} distance={102} duration={MODULE_ENTER_DURATION} style={historyAside && styles.historyAside}>
+          <DetailCard id="admin-card-history" title="Historial">
+            <Timeline incident={incident} />
+            {(review.reviewable || notice) && (
+              <View style={[styles.reviewSection, { borderTopColor: theme.border }]}>
+                {review.reviewable && !reasonEditor && (
+                  <>
+                    <View style={styles.buttonRow}>
+                      <ActionButton id="admin-review-validate" label="Validar" tone="primary" disabled={locked || !!fieldEditor} busy={busy === 'validate'} onPress={() => void submit({ action: 'validate' })} />
+                      <ActionButton id="admin-review-reject" label="Descartar" tone="danger" disabled={locked || !!fieldEditor} onPress={() => openReason('reject')} />
+                    </View>
+                    <ActionButton id="admin-review-request-information" label="Solicitar información" disabled={locked || !!fieldEditor} onPress={() => openReason('request-information')} />
+                    {fieldEditor && <Text style={[styles.secondary, { color: theme.muted }]}>Guarda o cancela los cambios para continuar la revisión.</Text>}
+                  </>
+                )}
+                {review.reviewable && reasonEditor && (
+                  <View style={styles.editor}>
+                    <Text style={[styles.fieldLabel, { color: theme.text }]}>{reasonEditor.action === 'reject' ? 'Motivo del descarte' : 'Información que necesitas'}</Text>
+                    <TextInput
+                      accessibilityLabel={reasonEditor.action === 'reject' ? 'Motivo del descarte' : 'Información que necesitas'}
+                      editable={!locked}
+                      maxLength={2000}
+                      multiline
+                      value={reasonEditor.reason}
+                      onChangeText={(reason) => setEditor({ ...reasonEditor, reason, error: undefined })}
+                      style={[styles.input, styles.reasonInput, { color: theme.text, backgroundColor: theme.track, borderColor: theme.border }]}
+                    />
+                    <InlineError message={reasonEditor.error || actionError} />
+                    <View style={styles.buttonRow}>
+                      <ActionButton id={`admin-review-confirm-${reasonEditor.action}`} label={reasonEditor.action === 'reject' ? 'Descartar incidencia' : 'Registrar solicitud'} tone={reasonEditor.action === 'reject' ? 'danger' : 'primary'} disabled={locked} busy={busy === reasonEditor.action} onPress={sendReason} />
+                      <ActionButton label="Cancelar" disabled={locked} onPress={cancelEditor} />
+                    </View>
+                  </View>
+                )}
+                {!editor && <InlineError message={actionError} />}
+                {notice && <Text accessibilityLiveRegion="polite" style={[styles.secondary, { color: notice.conflict ? theme.warning : theme.success }]}>{notice.text}</Text>}
+                {loading && <ActivityIndicator accessibilityLabel="Actualizando incidencia" color={theme.accent} />}
+              </View>
+            )}
+            <View style={[styles.reviewSection, { borderTopColor: theme.border }]}>
+              <Text accessibilityRole="header" style={[styles.fieldLabel, { color: theme.text }]}>Comentarios</Text>
+              <Text style={[styles.secondary, { color: theme.muted }]}>Los comentarios aún no están disponibles.</Text>
+            </View>
+          </DetailCard>
+        </Reveal>
       </View>
-      <ReviewButton action="edit" label="Guardar cambios" busy={busy} onPress={save} />
-      <View style={{ height: 1, backgroundColor: theme.border, marginVertical: 4 }} />
-      <View style={{ gap: 6 }}>
-        <Text style={{ color: theme.muted, fontSize: 12, fontWeight: '700' }}>Motivo del rechazo o de la solicitud</Text>
-        <TextInput accessibilityLabel="Motivo del rechazo o de la solicitud" editable={!busy} multiline maxLength={2000} value={reason} onChangeText={setReason} style={[input, { minHeight: 88, paddingVertical: 10, textAlignVertical: 'top' }]} />
-      </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        <ReviewButton action="request-information" label="Solicitar información" busy={busy} onPress={() => withReason('request-information')} />
-        <ReviewButton action="reject" label="Rechazar" busy={busy} onPress={() => withReason('reject')} />
-      </View>
-      <ReviewButton action="validate" label="Validar incidencia" busy={busy} onPress={() => void send({ action: 'validate' })} />
-      {!!error && <Text accessibilityRole="alert" accessibilityLiveRegion="polite" style={{ color: theme.danger, fontWeight: '600' }}>{error}</Text>}
-    </Card>
+
+      {!historyAside && ticketAndAssignments}
+    </DetailScroll>
   );
 }
 
-function ReviewButton({ action, label, busy, onPress }: { action: ReviewCommand['action']; label: string; busy: ReviewCommand['action'] | null; onPress: () => void }) {
+function DetailScroll({ padding, children }: { padding: number; children: ReactNode }) {
+  return (
+    <ScrollView
+      nativeID="admin-detail-canvas"
+      style={styles.screen}
+      contentContainerStyle={[styles.content, { paddingHorizontal: padding, paddingTop: padding }]}
+      keyboardShouldPersistTaps="handled">
+      {children}
+    </ScrollView>
+  );
+}
+
+function DetailHeading({ title, status, backLabel, onBack }: { title: string; status?: string | null; backLabel: string; onBack: () => void }) {
   const theme = useAdminTheme();
-  const primary = action === 'validate';
-  const color = primary ? theme.background : action === 'reject' ? theme.danger : theme.accent;
+  return (
+    <View style={styles.heading}>
+      <Pressable
+        nativeID="admin-detail-back"
+        accessibilityRole="button"
+        accessibilityLabel={backLabel}
+        onPress={onBack}
+        style={({ pressed }) => [styles.back, { borderColor: theme.border, backgroundColor: theme.glass, opacity: pressed ? 0.7 : 1 }]}>
+        <ArrowLeft size={21} color={theme.text} aria-hidden />
+      </Pressable>
+      <View style={styles.headingTitle}>
+        <Text accessibilityRole="header" selectable style={[styles.title, { color: theme.text }]}>{title}</Text>
+        {status && <View style={styles.badge}><StatusPill status={status} /></View>}
+      </View>
+    </View>
+  );
+}
+
+function DetailCard({ id, title, icon, children, style }: { id: string; title: string; icon?: ReactNode; children: ReactNode; style?: ViewStyle }) {
+  const theme = useAdminTheme();
+  return (
+    <GlassSurface nativeID={id} style={[styles.card, { backgroundColor: theme.detailGlass, borderColor: theme.detailGlassBorder }, style]}>
+      <View style={styles.cardHeading}>
+        {icon}
+        <Text accessibilityRole="header" style={[styles.cardTitle, { color: theme.text }]}>{title}</Text>
+      </View>
+      {children}
+    </GlassSurface>
+  );
+}
+
+function ValueField({ label, value }: { label: string; value: string }) {
+  const theme = useAdminTheme();
+  return (
+    <View style={styles.field}>
+      <Text style={[styles.secondary, { color: theme.muted }]}>{label}</Text>
+      <Text selectable style={[styles.fieldLabel, { color: theme.text }]}>{value}</Text>
+    </View>
+  );
+}
+
+function CoordinateEditor({ values, disabled, onChange }: { values: Draft; disabled: boolean; onChange: (patch: Partial<Draft>) => void }) {
+  const theme = useAdminTheme();
+  return (
+    <View style={styles.editor}>
+      {([['latitude', 'Latitud'], ['longitude', 'Longitud']] as const).map(([key, label]) => (
+        <View key={key} style={styles.editorLabel}>
+          <Text style={[styles.secondary, { color: theme.muted }]}>{label}</Text>
+          <TextInput
+            accessibilityLabel={label}
+            editable={!disabled}
+            value={values[key]}
+            inputMode="decimal"
+            onChangeText={(value) => onChange({ [key]: value })}
+            style={[styles.input, { color: theme.text, backgroundColor: theme.track, borderColor: theme.border }]}
+          />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function Timeline({ incident }: { incident: IncidentDetail }) {
+  const theme = useAdminTheme();
+  const recorded = incident.history.some((entry) => entry.previousStatus == null && entry.status === 'REPORTED' && !reviewHistoryLabel(entry.action));
+  const events = [
+    ...(recorded ? [] : [{ key: 'reported', title: 'Reportada', status: 'REPORTED', date: incident.registeredAt, reason: null, actor: null }]),
+    ...incident.history.map((entry, index) => ({
+      key: `${entry.changedAt}-${index}`,
+      title: reviewHistoryLabel(entry.action) ?? (entry.status === 'REPORTED' ? 'Reportada' : incidentStatus(entry.status)),
+      status: entry.status,
+      date: entry.changedAt,
+      reason: entry.action === 'INCIDENT_EDITED' && entry.reason ? `Campos modificados · ${entry.reason}` : entry.reason,
+      actor: entry.actorName || entry.actorId,
+    })),
+  ];
+
+  return (
+    <View>
+      {events.map(({ key, title, status, date, reason, actor }, index) => (
+        <View key={key} style={styles.event}>
+          <View aria-hidden style={styles.eventTrack}>
+            <View style={[styles.eventDot, { backgroundColor: theme[incidentStatusTone(status)] }]} />
+            {index !== events.length - 1 && <View style={[styles.eventLine, { backgroundColor: theme.border }]} />}
+          </View>
+          <View style={[styles.eventCopy, index === events.length - 1 && styles.lastEvent]}>
+            <Text style={[styles.eventTitle, { color: theme.text }]}>{title}</Text>
+            <Text style={[styles.secondary, { color: theme.muted }]}>{formatDate(date)}</Text>
+            {reason && <Text selectable style={[styles.description, { color: theme.text }]}>{reason}</Text>}
+            {actor && <Text style={[styles.secondary, { color: theme.muted }]}>{actor}</Text>}
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const PinnedTicket = memo(function PinnedTicket({ incident, retry }: { incident: IncidentDetail; retry: () => void }) {
+  const reduceMotion = useReducedMotion();
+  const progress = useSharedValue(reduceMotion ? 3 : 0);
+
+  useFocusEffect(useCallback(() => {
+    if (reduceMotion) {
+      progress.set(3);
+      return;
+    }
+
+    // La subida, el golpe de la chincheta y su asentamiento comparten la misma secuencia.
+    progress.set(0);
+    progress.set(withSequence(
+      withTiming(1, { duration: MODULE_ENTER_DURATION, easing: Easing.out(Easing.cubic) }),
+      withTiming(2, { duration: 210, easing: Easing.in(Easing.quad) }),
+      withTiming(3, { duration: 140, easing: Easing.out(Easing.cubic) }),
+    ));
+    return () => progress.set(0);
+  }, [progress, reduceMotion]));
+
+  const ticketEntrance = useAnimatedStyle(() => {
+    const rise = Math.min(progress.get(), 1);
+    return { opacity: rise, transform: [{ translateY: (1 - rise) * 132 }] };
+  });
+  const pinEntrance = useAnimatedStyle(() => {
+    const drop = Math.max(0, progress.get() - 1);
+    return {
+      opacity: Math.min(drop * 3, 1),
+      transform: [
+        { translateX: interpolate(drop, [0, 1, 2], [10, -1, 0]) },
+        { translateY: interpolate(drop, [0, 1, 2], [-27, 2, 0]) },
+      ],
+    };
+  });
+  const shadowEntrance = useAnimatedStyle(() => ({ opacity: Math.min(Math.max(0, (progress.get() - 1.6) / 0.4), 1) }));
+
+  return (
+    <View style={styles.pinnedTicket}>
+      <Animated.View style={ticketEntrance}>
+        <TicketDetail incident={incident} detail={{ state: { status: 'success', data: incident }, retry }} />
+      </Animated.View>
+      <View pointerEvents="none" aria-hidden style={styles.pin}>
+        <Animated.View style={[styles.pinShadow, shadowEntrance]} />
+        <Animated.View style={[StyleSheet.absoluteFill, pinEntrance]}>
+          <View style={styles.pinBody}>
+            <View style={styles.pinNeedle} />
+            <View style={styles.pinFoot} />
+            <View style={styles.pinStem} />
+            <View style={styles.pinCap}><View style={styles.pinGloss} /></View>
+          </View>
+        </Animated.View>
+      </View>
+    </View>
+  );
+});
+
+function ReadFailure({ message, retryable, retry }: { message: string; retryable: boolean; retry: () => void }) {
+  return (
+    <DetailCard id="admin-card-detail-error" title="Detalle de incidencia">
+      <InlineError message={message} />
+      {retryable && <ActionButton label="Reintentar" onPress={retry} />}
+    </DetailCard>
+  );
+}
+
+function InlineError({ message }: { message?: string }) {
+  const theme = useAdminTheme();
+  return message ? <Text accessibilityRole="alert" style={[styles.secondary, { color: theme.danger, fontWeight: '700' }]}>{message}</Text> : null;
+}
+
+function ActionButton({ id, label, tone, busy, disabled, onPress }: { id?: string; label: string; tone?: 'primary' | 'danger'; busy?: boolean; disabled?: boolean; onPress: () => void }) {
+  const theme = useAdminTheme();
+  const foreground = tone === 'primary' ? theme.background : tone === 'danger' ? theme.danger : theme.accent;
+  const background = tone === 'primary' ? theme.accent : theme.surface;
   return (
     <Pressable
-      nativeID={`admin-review-${action}`}
+      nativeID={id}
       accessibilityRole="button"
-      accessibilityState={{ busy: busy === action, disabled: !!busy }}
-      disabled={!!busy}
+      accessibilityState={{ disabled, busy }}
+      disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => ({ flexGrow: 1, minHeight: 42, paddingHorizontal: 16, borderRadius: 999, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: primary ? theme.accent : theme.surface, borderWidth: 1, borderColor: primary ? theme.accent : action === 'reject' ? `${theme.danger}55` : theme.border, opacity: pressed || (busy && busy !== action) ? 0.55 : 1 })}
-    >
-      {busy === action && <ActivityIndicator color={color} />}
-      <Text style={{ color, fontSize: 13, fontWeight: '700' }}>{label}</Text>
+      style={({ pressed }) => [styles.button, { backgroundColor: background, borderColor: tone === 'primary' ? theme.accent : theme.border, opacity: pressed || (disabled && !busy) ? 0.55 : 1 }]}>
+      {busy && <ActivityIndicator size="small" color={foreground} />}
+      <Text style={[styles.fieldLabel, { color: foreground, textAlign: 'center' }]}>{label}</Text>
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, marginLeft: ADMIN_COMPACT_SIDEBAR_INSET },
+  content: { width: '100%', maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center', paddingBottom: 70, gap: 24 },
+  heading: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+  back: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 22 },
+  headingTitle: { flex: 1, minWidth: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 },
+  title: { flexShrink: 1, fontSize: 34, lineHeight: 42, fontWeight: '800', letterSpacing: -1 },
+  badge: { alignSelf: 'center' },
+  shortSkeleton: { width: '62%', height: 44, borderRadius: 12 },
+  detailSkeleton: { height: 270, borderRadius: 16 },
+  moduleGroup: { gap: MODULE_GAP },
+  across: { flexDirection: 'row', alignItems: 'flex-start' },
+  alignedColumns: { flexDirection: 'row', alignItems: 'stretch' },
+  grow: { flex: 1, minWidth: 0 },
+  expand: { flexGrow: 1 },
+  overviewLayer: { zIndex: 2 },
+  fieldLayer: { zIndex: 3 },
+  menuLayer: { zIndex: 1 },
+  historyAside: { width: HISTORY_WIDTH },
+  locationAside: { width: LOCATION_WIDTH },
+  imageAside: { width: 176 },
+  imageFrame: { height: 166, overflow: 'hidden', borderRadius: 16, borderCurve: 'continuous', borderWidth: 1 },
+  imageContent: { backgroundColor: 'transparent', borderRadius: 0 },
+  mapFrame: { minHeight: 156, position: 'relative', overflow: 'hidden', borderRadius: 12, borderCurve: 'continuous' },
+  card: { padding: 16, borderRadius: 16, borderCurve: 'continuous', borderWidth: 1, gap: 12 },
+  cardHeading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardTitle: { fontSize: 17, fontWeight: '800', letterSpacing: -0.25 },
+  description: { fontSize: 14, lineHeight: 21 },
+  secondary: { fontSize: 12, lineHeight: 17 },
+  field: { minHeight: 42, gap: 2 },
+  fieldLabel: { fontSize: 13, lineHeight: 18, fontWeight: '700' },
+  editor: { gap: 10 },
+  editorLabel: { gap: 4 },
+  input: { minHeight: 42, paddingHorizontal: 10, borderRadius: 10, borderCurve: 'continuous', borderWidth: 1, fontSize: 13 },
+  reasonInput: { minHeight: 86, paddingVertical: 8, textAlignVertical: 'top' },
+  buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  button: { minHeight: 44, flexGrow: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 10, borderWidth: 1, borderRadius: 12, borderCurve: 'continuous' },
+  reviewSection: { borderTopWidth: 1, paddingTop: 12, gap: 9 },
+  event: { flexDirection: 'row', gap: 10 },
+  eventTrack: { width: 12, alignItems: 'center', paddingTop: 4, gap: 3 },
+  eventDot: { width: 10, height: 10, borderRadius: 5 },
+  eventLine: { width: 1, flex: 1 },
+  eventCopy: { flex: 1, minWidth: 0, gap: 3, paddingBottom: 17 },
+  lastEvent: { paddingBottom: 1 },
+  eventTitle: { fontSize: 14, fontWeight: '700' },
+  ticketColumn: { width: '100%', maxWidth: 350 },
+  ticketColumnAside: { flexBasis: 350, flexShrink: 1 },
+  pinnedTicket: { marginTop: 17, position: 'relative' },
+  pin: { position: 'absolute', top: -24, left: '54%', width: 42, height: 46, zIndex: 2 },
+  pinShadow: { position: 'absolute', bottom: 7, left: 11, width: 19, height: 3, borderRadius: 5, backgroundColor: 'rgba(58, 26, 25, 0.17)', boxShadow: '0 2px 5px rgba(45, 19, 18, 0.28)' },
+  pinBody: { position: 'absolute', left: 6, top: 1, width: 29, height: 39, transform: [{ rotate: '26deg' }] },
+  pinNeedle: { position: 'absolute', top: 23, left: 13, width: 3, height: 15, borderRadius: 2, backgroundColor: '#7D7371' },
+  pinFoot: { position: 'absolute', top: 18, left: 2, width: 24, height: 10, borderRadius: 8, backgroundColor: '#A52334', borderTopWidth: 2, borderTopColor: '#F37472' },
+  pinStem: { position: 'absolute', top: 8, left: 9, width: 11, height: 14, borderRadius: 4, backgroundColor: '#CE3C46', borderLeftWidth: 2, borderLeftColor: '#F47774' },
+  pinCap: { position: 'absolute', top: 0, left: 4, width: 21, height: 13, borderRadius: 9, backgroundColor: '#DD4851', borderTopColor: '#FF9690', borderTopWidth: 2, borderBottomWidth: 2, borderBottomColor: '#912536', boxShadow: '0 2px 3px rgba(91, 19, 28, 0.26)' },
+  pinGloss: { position: 'absolute', top: 1, left: 4, width: 9, height: 4, borderRadius: 4, backgroundColor: '#F9857E', opacity: 0.75 },
+});

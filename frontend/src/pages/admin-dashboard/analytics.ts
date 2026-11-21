@@ -1,3 +1,4 @@
+import { parseDate } from '@/pages/incidents/incident-filters';
 import type { IncidentListItem } from '@/types/incidents';
 
 export const SPANS = [7, 14, 30] as const;
@@ -19,12 +20,6 @@ export function inGroup(status: string | null, group: StatusGroup) {
 
 export function localDay(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function parseDate(value: string | null) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function daysEndingAt(now: Date, length: number, offset = 0) {

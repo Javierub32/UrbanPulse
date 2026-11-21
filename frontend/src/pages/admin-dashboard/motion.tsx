@@ -3,13 +3,20 @@ import { useCallback, useEffect, useState, type PropsWithChildren } from 'react'
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 
-type RevealProps = PropsWithChildren<{ index?: number; distance?: number; scale?: boolean; style?: StyleProp<ViewStyle> }>;
+type RevealProps = PropsWithChildren<{
+  index?: number;
+  distance?: number;
+  duration?: number;
+  from?: 'left' | 'right' | 'top' | 'bottom';
+  scale?: boolean;
+  style?: StyleProp<ViewStyle>;
+}>;
 
 /**
  * Entrada escalonada: el bloque aparece (opacidad + desplazamiento) cada vez que su pantalla
  * recibe el foco, de modo que cambiar de pestaña siempre se siente como una transición.
  */
-export function Reveal({ index = 0, distance = 18, scale = true, style, children }: RevealProps) {
+export function Reveal({ index = 0, distance = 18, duration = 560, from = 'bottom', scale = true, style, children }: RevealProps) {
   const reduceMotion = useReducedMotion();
   const progress = useSharedValue(reduceMotion ? 1 : 0);
 
@@ -20,15 +27,23 @@ export function Reveal({ index = 0, distance = 18, scale = true, style, children
         return;
       }
       progress.set(0);
-      progress.set(withDelay(index * 70, withTiming(1, { duration: 560, easing: Easing.out(Easing.cubic) })));
+      progress.set(withDelay(index * 70, withTiming(1, { duration, easing: Easing.out(Easing.cubic) })));
       return () => progress.set(0);
-    }, [index, reduceMotion, progress]),
+    }, [index, duration, reduceMotion, progress]),
   );
 
-  const animated = useAnimatedStyle(() => ({
-    opacity: progress.get(),
-    transform: [{ translateY: (1 - progress.get()) * distance }, { scale: scale ? 0.985 + 0.015 * progress.get() : 1 }],
-  }));
+  const animated = useAnimatedStyle(() => {
+    const value = progress.get();
+    const shift = (1 - value) * distance;
+    return {
+      opacity: value,
+      transform: [
+        { translateX: from === 'left' ? -shift : from === 'right' ? shift : 0 },
+        { translateY: from === 'top' ? -shift : from === 'bottom' ? shift : 0 },
+        { scale: scale ? 0.985 + 0.015 * value : 1 },
+      ],
+    };
+  });
 
   return <Animated.View style={[style, animated]}>{children}</Animated.View>;
 }

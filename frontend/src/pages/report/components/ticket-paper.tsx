@@ -1,16 +1,7 @@
-import { forwardRef, useMemo, type ComponentProps } from 'react';
-import { Animated, StyleSheet } from 'react-native';
-import Svg, { ClipPath, Defs, FeGaussianBlur, Filter, G, LinearGradient, Mask, Path, Pattern, Rect, Stop } from 'react-native-svg';
+import { useId } from 'react';
+import { StyleSheet } from 'react-native';
+import Svg, { ClipPath, Defs, FeGaussianBlur, Filter, G, LinearGradient, Path, Pattern, Rect, Stop } from 'react-native-svg';
 
-// Animated adds a native-only prop that SVG elements must not forward to the web DOM.
-const PaperPath = forwardRef<Path, ComponentProps<typeof Path> & { collapsable?: boolean }>(function PaperPath({ collapsable: _collapsable, ...props }, ref) {
-  return <Path ref={ref} {...props} />;
-});
-const PaperRect = forwardRef<Rect, ComponentProps<typeof Rect> & { collapsable?: boolean }>(function PaperRect({ collapsable: _collapsable, ...props }, ref) {
-  return <Rect ref={ref} {...props} />;
-});
-const AnimatedPath = Animated.createAnimatedComponent(PaperPath);
-const AnimatedRect = Animated.createAnimatedComponent(PaperRect);
 const INSET = 32;
 export const TICKET_EDGE_HEIGHT = 10;
 const GRAIN_TILE = 48;
@@ -68,24 +59,26 @@ function PaperFinish({ id, d, ink, variant = 'sheet' }: { id: string; d: string;
   </>;
 }
 
-function PaperShadow({ id, d, opacity = 1, clipPath }: { id: string; d: string; opacity?: number | Animated.Value | Animated.AnimatedSubtraction<number>; clipPath?: string }) {
+function PaperShadow({ id, d, clipPath }: { id: string; d: string; clipPath?: string }) {
   return <G clipPath={clipPath}>
     <Defs>
       <Filter id={`${id}-ambient`} x="-50%" y="-50%" width="200%" height="200%"><FeGaussianBlur stdDeviation="10" /></Filter>
       <Filter id={`${id}-contact`} x="-50%" y="-50%" width="200%" height="200%"><FeGaussianBlur stdDeviation="1.2" /></Filter>
     </Defs>
     {/* Soft, wide shadow: the paper floats above the map. */}
-    <AnimatedPath d={d} fill="#000000" opacity={typeof opacity === 'number' ? 0.16 * opacity : opacity.interpolate({ inputRange: [0, 1], outputRange: [0, 0.16] })} transform="translate(0 12)" filter={`url(#${id}-ambient)`} />
+    <Path d={d} fill="#000000" opacity={0.16} transform="translate(0 12)" filter={`url(#${id}-ambient)`} />
     {/* Tight contact shadow: replaces the hard outline that made it look like a card. */}
-    <AnimatedPath d={d} fill="#000000" opacity={typeof opacity === 'number' ? 0.2 * opacity : opacity.interpolate({ inputRange: [0, 1], outputRange: [0, 0.2] })} transform="translate(0 1)" filter={`url(#${id}-contact)`} />
+    <Path d={d} fill="#000000" opacity={0.2} transform="translate(0 1)" filter={`url(#${id}-contact)`} />
   </G>;
 }
 
-export function PaperSwatch({ width, height, color, ink }: { width: number; height: number; color: string; ink: string }) {
+export function PaperSwatch({ width, height, color, ink, guideColor }: PaperProps & { guideColor: string }) {
+  const id = 'ticket-swatch-' + useId().replace(/[^\w-]/g, '');
   const d = `M 0 0 H ${width} V ${height} H 0 Z`;
   return <Svg pointerEvents="none" width={width} height={height} style={StyleSheet.absoluteFill} aria-hidden>
     <Path d={d} fill={color} />
-    <PaperFinish id="ticket-swatch" d={d} ink={ink} variant="flat" />
+    <PaperFinish id={id} d={d} ink={ink} variant="flat" />
+    <Path d={`M 1 ${height / 2} H ${width - 1}`} stroke={guideColor} strokeWidth={1} strokeLinecap="round" strokeDasharray="1 4" />
   </Svg>;
 }
 
@@ -96,13 +89,14 @@ function edgePoints(width: number) {
     const x = index * size;
     return `L ${INSET + x + size / 2} ${INSET + TICKET_EDGE_HEIGHT - toothDepth(index)} L ${INSET + x + size} ${INSET + TICKET_EDGE_HEIGHT}`;
   }).join(' ');
-  return { points, length: count * 2 * Math.hypot(size / 2, TICKET_EDGE_HEIGHT) };
+  return points;
 }
 
-type PaperProps = { width: number; color: string; ink: string; tear: Animated.Value };
+type PaperProps = { width: number; height: number; color: string; ink: string };
 
-export function TicketBackground({ width, height, color, ink, tear }: PaperProps & { height: number }) {
-  const { points, length } = edgePoints(width);
+export function TicketBackground({ width, height, color, ink, showTearEdge = false }: PaperProps & { showTearEdge?: boolean }) {
+  const id = 'ticket-paper-' + useId().replace(/[^\w-]/g, '');
+  const points = edgePoints(width);
   const edgeY = height - TICKET_EDGE_HEIGHT;
   const count = Math.max(1, Math.round(width / 16));
   const size = width / count;
@@ -112,45 +106,26 @@ export function TicketBackground({ width, height, color, ink, tear }: PaperProps
       const x = INSET + width - index * size;
       return `L ${x - size / 2} ${INSET + height - toothDepth(count - 1 - index)} L ${x - size} ${INSET + height}`;
     }).join(' ') + ' Z';
-  const offset = tear.interpolate({ inputRange: [0, 1], outputRange: [length, 0] });
 
   return <Svg pointerEvents="none" width={width + INSET * 2} height={height + INSET * 2} style={styles.background} aria-hidden>
-    <PaperShadow id="ticket" d={paper} />
+    <PaperShadow id={id} d={paper} />
     <Path d={paper} fill={color} stroke="#000000" strokeOpacity={0.07} strokeWidth={0.75} strokeLinejoin="miter" />
-    <PaperFinish id="ticket" d={paper} ink={ink} />
-    <AnimatedPath d={edge} transform={`translate(0 ${edgeY})`} fill="none" stroke={ink} strokeOpacity={0.3} strokeWidth={1} strokeDasharray={[length, length]} strokeDashoffset={offset} />
+    <PaperFinish id={id} d={paper} ink={ink} />
+    {showTearEdge && <Path d={edge} transform={`translate(0 ${edgeY})`} fill="none" stroke={ink} strokeOpacity={0.3} strokeWidth={1} />}
   </Svg>;
 }
 
-export function TicketStrip({ width, height, color, ink, tear }: PaperProps & { height: number }) {
-  const { points } = edgePoints(width);
+export function TicketStrip({ width, height, color, ink }: PaperProps) {
+  const id = 'ticket-strip-' + useId().replace(/[^\w-]/g, '');
+  const points = edgePoints(width);
   const strip = `M ${INSET} ${INSET + TICKET_EDGE_HEIGHT} ${points} V ${INSET + height} H ${INSET} Z`;
-  const attached = useMemo(() => Animated.subtract(1, tear), [tear]);
   return <Svg pointerEvents="none" width={width + INSET * 2} height={height + INSET * 2} style={styles.background} aria-hidden>
-    <Defs><ClipPath id="ticket-strip-sides"><Rect x={0} y={INSET + TICKET_EDGE_HEIGHT} width={width + INSET * 2} height={height + INSET} /></ClipPath></Defs>
+    <Defs><ClipPath id={`${id}-sides`}><Rect x={0} y={INSET + TICKET_EDGE_HEIGHT} width={width + INSET * 2} height={height + INSET} /></ClipPath></Defs>
     {/* Attached, the roll shares the ticket's side shadow but casts none onto it. */}
-    <PaperShadow id="ticket-strip-attached" d={strip} opacity={attached} clipPath="url(#ticket-strip-sides)" />
-    {/* Once torn it is a loose piece of paper, so its top edge casts shadow too. */}
-    <PaperShadow id="ticket-strip" d={strip} opacity={tear} />
+    <PaperShadow id={id} d={strip} clipPath={`url(#${id}-sides)`} />
     <Path d={strip} fill={color} stroke="#000000" strokeOpacity={0.07} strokeWidth={0.75} strokeLinejoin="miter" />
-    <PaperFinish id="ticket-strip" d={strip} ink={ink} variant="roll" />
+    <PaperFinish id={id} d={strip} ink={ink} variant="roll" />
   </Svg>;
 }
 
-export function TearGuide({ width, color, tear }: { width: number; color: string; tear: Animated.Value }) {
-  const fadeWidth = 24;
-  const fadingEdge = tear.interpolate({ inputRange: [0, 1], outputRange: [-fadeWidth, width] });
-  const intactEdge = tear.interpolate({ inputRange: [0, 1], outputRange: [0, width + fadeWidth] });
-  return <Svg pointerEvents="none" width={width} height={TICKET_EDGE_HEIGHT} style={styles.guide} aria-hidden>
-    <Defs>
-      <LinearGradient id="ticket-tear-fade" x1="0" y1="0" x2="1" y2="0"><Stop offset="0" stopColor="white" stopOpacity={0} /><Stop offset="1" stopColor="white" /></LinearGradient>
-      <Mask id="ticket-tear-guide" maskUnits="userSpaceOnUse" x={0} y={0} width={width} height={TICKET_EDGE_HEIGHT}>
-        <AnimatedRect x={fadingEdge} y={0} width={fadeWidth} height={TICKET_EDGE_HEIGHT} fill="url(#ticket-tear-fade)" />
-        <AnimatedRect x={intactEdge} y={0} width={width} height={TICKET_EDGE_HEIGHT} fill="white" />
-      </Mask>
-    </Defs>
-    <Path d={`M 1 ${TICKET_EDGE_HEIGHT / 2} H ${width - 1}`} fill="none" stroke={color} strokeWidth={1} strokeLinecap="round" strokeDasharray="1 4" mask="url(#ticket-tear-guide)" />
-  </Svg>;
-}
-
-const styles = StyleSheet.create({ background: { position: 'absolute', left: -INSET, top: -INSET }, guide: { position: 'absolute', left: 0, top: 0 } });
+const styles = StyleSheet.create({ background: { position: 'absolute', left: -INSET, top: -INSET } });

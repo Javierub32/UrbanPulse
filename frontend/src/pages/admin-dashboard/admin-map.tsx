@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
@@ -13,10 +13,10 @@ import { startOfPeriod, timeFilters, type TimeFilter } from '@/pages/explore/tim
 import { TicketDetail, useTicketDetail } from '@/pages/incidents/components/ticket-stack';
 import { categories } from '@/pages/report/services/report-service';
 import { ADMIN_SIDEBAR_INSET } from './admin-shell';
+import { GlassFilterMenu } from './glass-filter-menu';
 import { incidentStatusOptions } from './incident-status';
 import { useAdminTheme } from './theme';
 
-type Option = { value: string; label: string };
 const TICKET_WIDTH = 500;
 // Sombra ambiental que sigue la silueta del papel (incluido el borde rasgado), por encima de la del propio ticket.
 const PAPER_LIFT = 'drop-shadow(0 16px 20px rgba(15, 40, 40, 0.14)) drop-shadow(0 2px 4px rgba(15, 40, 40, 0.08))';
@@ -30,42 +30,6 @@ const PAPER_FOOTER = 32;
 const TEAR_HIDDEN = 20;
 // Margen entre «Más información» y el borde inferior al terminar el desplazamiento.
 const BOTTOM_MARGIN = 20;
-
-function Chevron({ open, color }: { open: boolean; color: string }) {
-  return <View aria-hidden><Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><Path d={open ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} /></Svg></View>;
-}
-
-/** Filtro desplegable de cristal: la píldora muestra el valor y abre el menú justo debajo. */
-function GlassFilterMenu({ id, label, value, options, onChange }: { id: string; label: string; value: string; options: readonly Option[]; onChange: (value: string) => void }) {
-  const t = useTheme();
-  const [open, setOpen] = useState(false);
-  const selected = options.find((option) => option.value === value);
-  return (
-    <View style={{ position: 'relative', zIndex: open ? 3 : 1 }}>
-      <GlassChip nativeID={`admin-select-${id}`} refractive clear label={`${label}: ${selected?.label ?? 'Todas'}`} selected={!!selected} accessibilityRole="button" onPress={() => setOpen((current) => !current)}>
-        <Chevron open={open} color={selected ? t.accentContrast : t.muted} />
-      </GlassChip>
-      {open && (
-        <>
-          <Pressable accessibilityLabel={`Cerrar ${label}`} onPress={() => setOpen(false)} style={{ position: 'absolute', top: -3000, left: -3000, width: 6000, height: 6000, cursor: 'auto' }} />
-          <GlassSurface refractive accessibilityRole="menu" style={[styles.menu, { borderColor: t.glassEdge }]}>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {[{ value: '', label: 'Todas' }, ...options].map((option) => {
-                const active = option.value === value;
-                return (
-                  <Pressable key={option.value} nativeID={`admin-option-${id}-${option.value || 'all'}`} accessibilityRole="menuitem" accessibilityState={{ selected: active }} onPress={() => { onChange(option.value); setOpen(false); }} style={[styles.menuItem, active && { backgroundColor: t.glassSelected }]}>
-                    <Text style={{ color: active ? t.accent : t.ink, fontSize: 13, fontWeight: active ? '700' : '600' }}>{option.label}</Text>
-                    {active && <Text aria-hidden style={{ color: t.accent, fontSize: 13, fontWeight: '800' }}>✓</Text>}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </GlassSurface>
-        </>
-      )}
-    </View>
-  );
-}
 
 /**
  * Ticket que envió el ciudadano, pegado al borde derecho. En reposo asoma desde abajo con el borde
@@ -172,16 +136,15 @@ export default function AdminMapScreen() {
   const reduceMotion = useReducedMotion();
   const [mapOpacity] = useState(() => new Animated.Value(0));
   const [introKey, setIntroKey] = useState(0);
-  const mapReady = useRef(false);
-  // El fundido espera a que el mapa haya cargado para no mostrar el estado de carga.
+  const hasSettled = useRef(false);
   const fadeIn = useCallback(() => {
     Animated.timing(mapOpacity, { toValue: 1, duration: reduceMotion ? 0 : 650, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [mapOpacity, reduceMotion]);
-  const handleMapReady = useCallback(() => { mapReady.current = true; fadeIn(); }, [fadeIn]);
+  const handleMapSettled = useCallback(() => { hasSettled.current = true; fadeIn(); }, [fadeIn]);
   useFocusEffect(useCallback(() => {
     setIntroKey((value) => value + 1);
     mapOpacity.setValue(0);
-    if (mapReady.current) fadeIn();
+    if (hasSettled.current) fadeIn();
     return () => mapOpacity.stopAnimation();
   }, [fadeIn, mapOpacity]));
 
@@ -195,7 +158,7 @@ export default function AdminMapScreen() {
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: mapOpacity }]}>
           <ExploreMap
             introKey={introKey}
-            onMapReady={handleMapReady}
+            onMapSettled={handleMapSettled}
             zoomControls
             filters={filters}
             controlsInset={headerHeight}
@@ -235,8 +198,6 @@ export default function AdminMapScreen() {
 }
 
 const styles = StyleSheet.create({
-  menu: { position: 'absolute', top: 46, right: 0, minWidth: 220, maxHeight: 336, padding: 6, borderRadius: 18, borderWidth: 1, borderCurve: 'continuous', overflow: 'hidden', boxShadow: '0 10px 30px rgba(15, 56, 58, 0.16)' },
-  menuItem: { minHeight: 38, paddingHorizontal: 12, borderRadius: 12, borderCurve: 'continuous', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   ticketPanel: { position: 'absolute', right: TICKET_RIGHT, width: TICKET_WIDTH, maxWidth: '45%', gap: TICKET_GAP, zIndex: 5 },
   round: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, overflow: 'hidden', boxShadow: '0 3px 12px rgba(0, 0, 0, 0.12)' },
   roundInner: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },

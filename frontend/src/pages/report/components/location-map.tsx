@@ -5,9 +5,9 @@ import { Colors } from '@/constants/theme';
 import { useIncidentMapStyle } from '@/pages/explore/map-style';
 import type { Coordinate } from '../hooks/use-report-location';
 
-type Props = { coordinate: Coordinate | null; onSelect?: (coordinate: Coordinate) => void; height?: number; ticket?: boolean };
+type Props = { coordinate: Coordinate | null; onSelect?: (coordinate: Coordinate) => void; height?: number | '100%'; ticket?: boolean; showAttribution?: boolean };
 
-export default function LocationMap({ coordinate, onSelect, height = 300, ticket = false }: Props) {
+export default function LocationMap({ coordinate, onSelect, height = 300, ticket = false, showAttribution = !ticket }: Props) {
   const mapStyle = useIncidentMapStyle();
   const camera = useRef<CameraRef>(null);
   useEffect(() => {
@@ -20,7 +20,7 @@ export default function LocationMap({ coordinate, onSelect, height = 300, ticket
       {mapStyle && <MapLibreMap
         accessibilityLabel="Mapa para seleccionar la ubicación de la incidencia"
         mapStyle={mapStyle}
-        attribution={!ticket}
+        attribution={showAttribution}
         style={StyleSheet.absoluteFill}
         onPress={event => {
           const [longitude, latitude] = event.nativeEvent.lngLat;

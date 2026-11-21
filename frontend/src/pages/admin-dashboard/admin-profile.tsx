@@ -1,28 +1,13 @@
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
 import { useAuth } from '@/context/AuthContext';
+import { AdminLogoutButton } from './admin-logout-button';
 import { Reveal } from './motion';
 import { useAdminTheme } from './theme';
 
 export default function AdminProfileScreen() {
   const theme = useAdminTheme();
-  const { user, signOut } = useAuth();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  async function logout() {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      await signOut();
-    } catch {
-      setError('No se ha podido cerrar la sesión. Vuelve a intentarlo.');
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { user } = useAuth();
 
   if (!user) return null;
   return (
@@ -38,17 +23,7 @@ export default function AdminProfileScreen() {
         <View style={{ gap: 5 }}><Text style={{ color: theme.muted, fontSize: 12, fontWeight: '700' }}>Nombre</Text><Text selectable style={{ color: theme.text, fontSize: 17, fontWeight: '700' }}>{user.name}</Text></View>
         <View style={{ gap: 5 }}><Text style={{ color: theme.muted, fontSize: 12, fontWeight: '700' }}>Correo electrónico</Text><Text selectable style={{ color: theme.text, fontSize: 16 }}>{user.email}</Text></View>
         <View style={{ gap: 5 }}><Text style={{ color: theme.muted, fontSize: 12, fontWeight: '700' }}>Rol</Text><Text style={{ color: theme.text, fontSize: 16 }}>Operador</Text></View>
-        {error ? <Text accessibilityRole="alert" style={{ color: theme.danger }}>{error}</Text> : null}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Cerrar sesión"
-          accessibilityState={{ disabled: busy, busy }}
-          disabled={busy}
-          onPress={() => void logout()}
-          style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 48, minWidth: 150, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: theme.accent, opacity: busy || pressed ? 0.7 : 1 })}
-        >
-          {busy ? <ActivityIndicator color={theme.surface} /> : <Text style={{ color: theme.background, fontSize: 14, fontWeight: '700' }}>Cerrar sesión</Text>}
-        </Pressable>
+        <AdminLogoutButton />
       </View>
       </Reveal>
     </ScrollView>

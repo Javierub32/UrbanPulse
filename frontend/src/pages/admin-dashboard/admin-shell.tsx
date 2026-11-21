@@ -1,12 +1,12 @@
-import { Link, usePathname } from 'expo-router';
+import { Link, useGlobalSearchParams, usePathname, type Href } from 'expo-router';
 import { TabList, TabSlot, Tabs, TabTrigger } from 'expo-router/ui';
-import type { TabTriggerSlotProps } from 'expo-router/ui';
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, View, type LayoutChangeEvent } from 'react-native';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type PropsWithChildren } from 'react';
+import { FlatList, Pressable, Text, View, type LayoutChangeEvent } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
 import { useAuth } from '@/context/AuthContext';
+import { AdminLogoutButton } from './admin-logout-button';
 import { AdminIncidentsProvider, useAdminIncidents } from '@/pages/admin-dashboard/admin-incidents-context';
 import { relativeTime } from '@/pages/admin-dashboard/analytics';
 import { GlassPanel } from '@/pages/admin-dashboard/glass-panel';
@@ -14,8 +14,11 @@ import { incidentStatus, incidentStatusTone } from '@/pages/admin-dashboard/inci
 import { Reveal } from '@/pages/admin-dashboard/motion';
 import { useAdminTheme } from '@/pages/admin-dashboard/theme';
 
-/** Ancho que ocupa la barra lateral flotante (margen + ancho + separación). */
-export const ADMIN_SIDEBAR_INSET = 294;
+const SIDEBAR_MARGIN = 12;
+const SIDEBAR_WIDTH = 270;
+const COMPACT_SIDEBAR_WIDTH = 64;
+export const ADMIN_SIDEBAR_INSET = SIDEBAR_WIDTH + SIDEBAR_MARGIN * 2;
+export const ADMIN_COMPACT_SIDEBAR_INSET = COMPACT_SIDEBAR_WIDTH + SIDEBAR_MARGIN * 2;
 
 type IconName = 'home' | 'explore' | 'incidents' | 'profile';
 const iconPaths = {
@@ -31,35 +34,38 @@ function Icon({ name, color }: { name: IconName; color: string }) {
 type NavLayout = { y: number; h: number };
 const NavContext = createContext<{ report: (id: IconName, layout: NavLayout) => void; select: (id: IconName) => void } | null>(null);
 
-type NavItemProps = TabTriggerSlotProps & { label: string; icon: IconName };
+type NavItemProps = { label: string; icon: IconName; href: Href; isFocused: boolean; compact: boolean };
 
-function NavItem({ label, icon, isFocused, ...props }: NavItemProps) {
+function NavItem({ label, icon, href, isFocused, compact }: NavItemProps) {
   const theme = useAdminTheme();
   const nav = useContext(NavContext);
   const lift = useSharedValue(1);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (!isFocused) return;
     nav?.select(icon);
-    lift.set(withSequence(withTiming(0.92, { duration: 80 }), withTiming(1, { duration: 140 })));
-  }, [isFocused, icon, nav, lift]);
+    if (!reduceMotion) lift.set(withSequence(withTiming(0.92, { duration: 80 }), withTiming(1, { duration: 140 })));
+  }, [isFocused, icon, nav, lift, reduceMotion]);
 
   const iconStyle = useAnimatedStyle(() => ({ transform: [{ scale: lift.get() }] }));
   const color = isFocused ? theme.accent : theme.muted;
 
   return (
-    <Pressable
-      {...props}
-      nativeID={`admin-nav-${icon}${isFocused ? '-selected' : ''}`}
-      accessibilityRole="tab"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: isFocused }}
-      onLayout={(event: LayoutChangeEvent) => nav?.report(icon, { y: event.nativeEvent.layout.y, h: event.nativeEvent.layout.height })}
-      style={{ minHeight: 48, paddingHorizontal: 16, borderRadius: 14, borderCurve: 'continuous', flexDirection: 'row', alignItems: 'center', gap: 14 }}
-    >
-      <Animated.View style={iconStyle}><Icon name={icon} color={color} /></Animated.View>
-      <Text style={{ color: isFocused ? theme.accent : theme.text, fontSize: 15, fontWeight: isFocused ? '700' : '600' }}>{label}</Text>
-    </Pressable>
+    <Link href={href} dismissTo={compact} asChild>
+      <Pressable
+        nativeID={`admin-nav-${icon}${isFocused ? '-selected' : ''}`}
+        role="tab"
+        accessibilityRole="tab"
+        accessibilityLabel={label}
+        accessibilityState={{ selected: isFocused }}
+        onLayout={(event: LayoutChangeEvent) => nav?.report(icon, { y: event.nativeEvent.layout.y, h: event.nativeEvent.layout.height })}
+        style={{ minHeight: 48, paddingHorizontal: compact ? 0 : 16, borderRadius: 14, borderCurve: 'continuous', flexDirection: 'row', alignItems: 'center', justifyContent: compact ? 'center' : 'flex-start', gap: 14 }}
+      >
+        <Animated.View style={iconStyle}><Icon name={icon} color={color} /></Animated.View>
+        {!compact && <Text numberOfLines={1} style={{ color: isFocused ? theme.accent : theme.text, fontSize: 15, fontWeight: isFocused ? '700' : '600' }}>{label}</Text>}
+      </Pressable>
+    </Link>
   );
 }
 
@@ -100,7 +106,7 @@ function NavGroup({ children }: { children: React.ReactNode }) {
 
   return (
     <NavContext.Provider value={{ report, select: setActive }}>
-      <View style={{ position: 'relative', gap: 4 }}>
+      <View accessibilityRole="tablist" accessibilityLabel="Navegación del operador" style={{ position: 'relative', gap: 4 }}>
         <Animated.View nativeID="admin-nav-pill" style={[{ pointerEvents: 'none', position: 'absolute', left: 0, right: 0, top: 0, borderRadius: 14, borderCurve: 'continuous' }, pill]} />
         {children}
       </View>
@@ -113,25 +119,25 @@ function initials(name: string | undefined) {
   return ((parts[0]?.[0] ?? 'A') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
 }
 
-function SidebarHeader() {
+function SidebarHeader({ compact }: { compact: boolean }) {
   const theme = useAdminTheme();
   const { user } = useAuth();
   return (
-    <View style={{ gap: 14, marginBottom: 18 }}>
-      <View style={{ paddingHorizontal: 6, paddingTop: 6 }}>
-        <Text style={{ color: theme.text, fontSize: 20, fontWeight: '800', letterSpacing: -0.6 }}>UrbanPulse</Text>
-        <Text style={{ color: theme.muted, fontSize: 10, fontWeight: '700', letterSpacing: 1.4 }}>GESTIÓN MUNICIPAL</Text>
+    <View style={{ gap: compact ? 8 : 14, marginBottom: compact ? 10 : 18 }}>
+      <View style={{ paddingHorizontal: 6, paddingTop: 6, alignItems: compact ? 'center' : 'flex-start' }}>
+        <Text numberOfLines={1} accessibilityLabel="UrbanPulse" style={{ color: theme.text, fontSize: compact ? 16 : 20, fontWeight: '800', letterSpacing: -0.6 }}>{compact ? 'UP' : 'UrbanPulse'}</Text>
+        {!compact && <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 10, fontWeight: '700', letterSpacing: 1.4 }}>GESTIÓN MUNICIPAL</Text>}
       </View>
-      <View nativeID="admin-user-card" style={{ padding: 12, borderRadius: 18, borderCurve: 'continuous', borderWidth: 1, borderColor: theme.border, gap: 8 }}>
-        <Link href="/operator/profile" asChild>
-          <Pressable nativeID="admin-user-link" accessibilityRole="link" accessibilityLabel="Abrir perfil" style={{ flexDirection: 'row', alignItems: 'center', gap: 11, minHeight: 44 }}>
+      <View nativeID={compact ? undefined : 'admin-user-card'} style={compact ? undefined : { padding: 12, borderRadius: 18, borderCurve: 'continuous', borderWidth: 1, borderColor: theme.border, gap: 8 }}>
+        <Link href="/operator/profile" dismissTo={compact} asChild>
+          <Pressable nativeID="admin-user-link" accessibilityRole="link" accessibilityLabel="Abrir perfil" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: compact ? 'center' : 'flex-start', gap: 11, minHeight: 44 }}>
             <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ color: theme.background, fontSize: 14, fontWeight: '800', letterSpacing: 0.4 }}>{initials(user?.name)}</Text>
             </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
+            {!compact && <View style={{ flex: 1, minWidth: 0 }}>
               <Text numberOfLines={1} style={{ color: theme.text, fontSize: 15, fontWeight: '700' }}>{user?.name ?? 'Operador'}</Text>
-              <Text style={{ color: theme.muted, fontSize: 12 }}>Operador municipal</Text>
-            </View>
+              <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 12 }}>Operador municipal</Text>
+            </View>}
           </Pressable>
         </Link>
       </View>
@@ -142,80 +148,95 @@ function SidebarHeader() {
 function RecentIncidents() {
   const theme = useAdminTheme();
   const { state, retry } = useAdminIncidents();
-  const recent = state.status === 'success' ? state.data.slice(0, 5) : [];
   return (
-    <View nativeID="admin-recent-incidents" accessibilityLabel="Incidencias recientes" style={{ flexShrink: 1, minHeight: 0, paddingVertical: 8, paddingHorizontal: 4 }}>
-      <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 2 }} showsVerticalScrollIndicator={false}>
-        {state.status === 'loading' && <Text style={{ color: theme.muted, fontSize: 13, paddingHorizontal: 6 }}>Cargando incidencias…</Text>}
-        {state.status === 'error' && (
-          <View style={{ paddingHorizontal: 6 }}>
-            <Text accessibilityRole="alert" style={{ color: theme.muted }}>No se han podido cargar.</Text>
-            <Pressable accessibilityRole="button" onPress={retry} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: theme.accent, fontWeight: '700' }}>Reintentar</Text></Pressable>
+    <View nativeID="admin-recent-incidents" accessibilityLabel="Incidencias recientes" style={{ flex: 1, minHeight: 0, paddingVertical: 8, paddingHorizontal: 4 }}>
+      <FlatList
+        nativeID="admin-recent-incidents-scroll"
+        data={state.status === 'success' ? state.data : []}
+        keyExtractor={(incident) => incident.id}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ gap: 2, paddingBottom: 28 }}
+        ListEmptyComponent={
+          <View>
+            {state.status === 'loading' && <Text style={{ color: theme.muted, fontSize: 13, paddingHorizontal: 6 }}>Cargando incidencias…</Text>}
+            {state.status === 'error' && (
+              <View style={{ paddingHorizontal: 6 }}>
+                <Text accessibilityRole="alert" style={{ color: theme.muted }}>No se han podido cargar.</Text>
+                <Pressable accessibilityRole="button" onPress={retry} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: theme.accent, fontWeight: '700' }}>Reintentar</Text></Pressable>
+              </View>
+            )}
+            {state.status === 'success' && <Text style={{ color: theme.muted, paddingHorizontal: 6 }}>Aún no hay incidencias.</Text>}
           </View>
-        )}
-        {state.status === 'success' && recent.length === 0 && <Text style={{ color: theme.muted, paddingHorizontal: 6 }}>Aún no hay incidencias.</Text>}
-        {recent.map((incident, index) => {
+        }
+        renderItem={({ item: incident, index }) => {
           const title = incident.title?.trim() || 'Incidencia sin título';
-          return (
-            <Reveal key={incident.id} index={index + 3} distance={8}>
-              <Link href={`/operator/incident/${incident.id}`} asChild>
-                <Pressable nativeID={`admin-sidebar-incident-${incident.id}`} accessibilityRole="link" accessibilityLabel={`${title}, ${incidentStatus(incident.status)}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 9, paddingHorizontal: 8, borderRadius: 11, borderCurve: 'continuous' }}>
-                  <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: theme[incidentStatusTone(incident.status)] }} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text numberOfLines={1} style={{ color: theme.text, fontSize: 13, fontWeight: '600' }}>{title}</Text>
-                    <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 11 }}>{incidentStatus(incident.status)} · {relativeTime(incident.registeredAt)}</Text>
-                  </View>
-                </Pressable>
-              </Link>
-            </Reveal>
+          const row = (
+            <Link href={`/operator/incident/${incident.id}`} asChild>
+              <Pressable nativeID={`admin-sidebar-incident-${incident.id}`} accessibilityRole="link" accessibilityLabel={`${title}, ${incidentStatus(incident.status)}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 9, paddingHorizontal: 8, borderRadius: 11, borderCurve: 'continuous' }}>
+                <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: theme[incidentStatusTone(incident.status)] }} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text numberOfLines={1} style={{ color: theme.text, fontSize: 13, fontWeight: '600' }}>{title}</Text>
+                  <Text numberOfLines={1} style={{ color: theme.muted, fontSize: 11 }}>{incidentStatus(incident.status)} · {relativeTime(incident.registeredAt)}</Text>
+                </View>
+              </Pressable>
+            </Link>
           );
-        })}
-      </ScrollView>
+          return index < 5 ? <Reveal index={index + 3} distance={8}>{row}</Reveal> : row;
+        }}
+      />
     </View>
   );
 }
 
 const items = [['home', 'Inicio', '/operator'], ['explore', 'Mapa', '/operator/map'], ['incidents', 'Incidencias', '/operator/incidents']] as const;
 
-function navigation() {
-  return items.map(([icon, label, href]) => (
-    <TabTrigger key={icon} name={icon} href={href} asChild>
-      <NavItem label={label} icon={icon} />
-    </TabTrigger>
-  ));
-}
+export function AdminWorkspace({ children }: PropsWithChildren) {
+  const pathname = usePathname();
+  const { from } = useGlobalSearchParams<{ from?: string }>();
+  const compact = pathname.startsWith('/operator/incident/');
+  const activePath = compact ? (from === 'map' ? '/operator/map' : '/operator/incidents') : pathname;
+  const reduceMotion = useReducedMotion();
+  const width = useSharedValue(compact ? COMPACT_SIDEBAR_WIDTH : SIDEBAR_WIDTH);
 
-/**
- * expo-router solo registra las rutas de los TabTrigger que son hijos directos de TabList, no los
- * anidados. Estos son los que definen las rutas (ocultos); los visibles de NavGroup los activan.
- */
-function routeTriggers() {
-  return [...items.map(([icon, , href]) => <TabTrigger key={icon} name={icon} href={href} style={{ display: 'none' }} />),
-    <TabTrigger key="profile" name="profile" href="/operator/profile" style={{ display: 'none' }} />];
-}
+  useEffect(() => {
+    const target = compact ? COMPACT_SIDEBAR_WIDTH : SIDEBAR_WIDTH;
+    width.set(reduceMotion ? target : withTiming(target, { duration: 300, easing: Easing.bezier(0.2, 0.8, 0.2, 1) }));
+  }, [compact, reduceMotion, width]);
 
-function SidebarFrame(props: React.ComponentProps<typeof View>) {
-  return <GlassPanel {...props} nativeID="admin-tab-list" radius={24} style={{ position: 'absolute', left: 12, top: 12, bottom: 12, width: 270, padding: 18 }} />;
+  const rail = useAnimatedStyle(() => ({ width: width.get() }));
+
+  return (
+    <AdminIncidentsProvider>
+      <View nativeID="admin-canvas" style={{ flex: 1 }}>
+        {children}
+        <Animated.View style={[{ position: 'absolute', left: SIDEBAR_MARGIN, top: SIDEBAR_MARGIN, bottom: SIDEBAR_MARGIN, zIndex: 8 }, rail]}>
+          <GlassPanel nativeID={compact ? 'admin-tab-rail' : 'admin-tab-list'} radius={24} style={{ flex: 1, minHeight: 0 }}>
+            <View style={{ flex: 1, minHeight: 0, overflow: 'hidden', borderRadius: 24, padding: compact ? 8 : 18 }}>
+              <SidebarHeader compact={compact} />
+              <NavGroup>
+                {items.map(([icon, label, href]) => <NavItem key={icon} icon={icon} label={label} href={href} isFocused={href === activePath} compact={compact} />)}
+              </NavGroup>
+              <View style={{ flex: 1, minHeight: 0, display: compact ? 'none' : 'flex' }}><RecentIncidents /></View>
+              {compact && <View style={{ flex: 1 }} />}
+              <AdminLogoutButton placement="sidebar" compact={compact} />
+            </View>
+          </GlassPanel>
+        </Animated.View>
+      </View>
+    </AdminIncidentsProvider>
+  );
 }
 
 export default function AdminShell() {
   // El mapa ocupa toda la pantalla y la barra lateral flota sobre él.
   const fullBleed = usePathname() === '/operator/map';
   return (
-    <AdminIncidentsProvider>
-      <View nativeID="admin-canvas" style={{ flex: 1 }}>
-        <Tabs>
-          <TabSlot style={{ flex: 1, minWidth: 0, marginLeft: fullBleed ? 0 : ADMIN_SIDEBAR_INSET, backgroundColor: 'transparent' }} />
-          <TabList asChild>
-            <SidebarFrame>
-              <SidebarHeader />
-              <NavGroup>{navigation()}</NavGroup>
-              <RecentIncidents />
-              {routeTriggers()}
-            </SidebarFrame>
-          </TabList>
-        </Tabs>
-      </View>
-    </AdminIncidentsProvider>
+    <Tabs>
+      <TabSlot style={{ flex: 1, minWidth: 0, marginLeft: fullBleed ? 0 : ADMIN_SIDEBAR_INSET, backgroundColor: 'transparent' }} />
+      <TabList style={{ display: 'none' }}>
+        {items.map(([icon, , href]) => <TabTrigger key={icon} name={icon} href={href} />)}
+        <TabTrigger name="profile" href="/operator/profile" />
+      </TabList>
+    </Tabs>
   );
 }

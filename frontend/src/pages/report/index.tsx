@@ -11,7 +11,8 @@ import { IncidentTicketContent } from '@/components/incident-ticket';
 import type { IncidentListItem } from '@/types/incidents';
 import IncidentDateTimePicker from './components/incident-date-time-picker';
 import LocationMap from './components/location-map';
-import { PaperSwatch, TearGuide, TicketBackground, TicketStrip, TICKET_EDGE_HEIGHT } from './components/ticket-paper';
+import { PaperSwatch, TicketBackground, TicketStrip, TICKET_EDGE_HEIGHT } from './components/ticket-paper';
+import { getTicketCutOffset } from './ticket-cut-scroll';
 import { useReportForm } from './hooks/use-report-form';
 import { useReportLocation, type LocationMode } from './hooks/use-report-location';
 import { useTicketAnimation } from './hooks/use-ticket-animation';
@@ -56,6 +57,7 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
   const completionHandled = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
   const scrollPosition = useRef(0);
+  const pendingScroll = useRef<{ target: number; finish: () => void; cancel: () => void } | null>(null);
   const gestureStart = useRef(0);
   const [scrollOffset] = useState(() => new Animated.Value(0));
   const [viewport, setViewport] = useState({ y: 0, height: 0 });
@@ -63,23 +65,28 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
   const [step, setStep] = useState(0);
   const [validation, setValidation] = useState('');
   const [finishedIncident, setFinishedIncident] = useState<IncidentListItem | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [flightDistance, setFlightDistance] = useState(windowHeight * 2);
   const [ticketSize, setTicketSize] = useState({ width: 0, height: 0 });
   const resolving = location.status === 'loading' || location.streetStatus === 'loading';
   const hasLocation = location.mode !== 'assets' && !!location.coordinate && location.status === 'idle';
+  const locked = form.busy || preparing || motion.active;
+  const primaryDisabled = locked || (step === 3 && resolving) || (step === 4 && (!ticketSize.height || !viewport.height));
+  const tearOffset = Animated.multiply(motion.tear, ticketSize.width);
   // The responder reads these refs only in gesture callbacks, never while rendering.
   // eslint-disable-next-line react-hooks/refs
   const paperScroll = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gesture) => !motion.active && Math.abs(gesture.dy) > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+    onMoveShouldSetPanResponder: (_, gesture) => !locked && Math.abs(gesture.dy) > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
     onPanResponderGrant: () => { gestureStart.current = scrollPosition.current; },
     onPanResponderMove: (_, gesture) => { scrollRef.current?.scrollTo({ y: Math.max(0, gestureStart.current - gesture.dy), animated: false }); },
-  }), [motion.active]);
+  }), [locked]);
   const wheelProps = Platform.OS === 'web' ? { onWheel: (event: { deltaY: number; preventDefault: () => void }) => {
-    if (motion.active) return;
     event.preventDefault();
+    if (locked) return;
     scrollRef.current?.scrollTo({ y: Math.max(0, scrollPosition.current + event.deltaY), animated: false });
   } } : {};
-  useEffect(() => { onBusyChange?.(form.busy || motion.active); }, [form.busy, motion.active, onBusyChange]);
+  useEffect(() => { onBusyChange?.(locked); }, [locked, onBusyChange]);
+  useEffect(() => () => pendingScroll.current?.cancel(), []);
   useEffect(() => { onPaperOverlayChange?.(motion.active); }, [motion.active, onPaperOverlayChange]);
   useEffect(() => {
     if (!finishedIncident || completionHandled.current) return;
@@ -103,23 +110,57 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
     setStep(value => Math.min(value + 1, steps.length - 1));
   }
 
+  function syncScroll(offset: number) {
+    scrollPosition.current = offset;
+    scrollOffset.setValue(offset);
+  }
+
+  function revealCut(target: number): Promise<number | null> {
+    if (Math.abs(scrollPosition.current - target) < 1) return Promise.resolve(scrollPosition.current);
+    if (motion.reduceMotion) {
+      scrollRef.current?.scrollTo({ y: target, animated: false });
+      syncScroll(target);
+      return Promise.resolve(target);
+    }
+    return new Promise(resolve => {
+      const finish = () => {
+        clearTimeout(timeout);
+        pendingScroll.current = null;
+        // End any smooth scroll before switching to the ticket overlay.
+        scrollRef.current?.scrollTo({ y: target, animated: false });
+        syncScroll(target);
+        resolve(target);
+      };
+      const timeout = setTimeout(finish, 750);
+      pendingScroll.current = {
+        target, finish,
+        cancel: () => { clearTimeout(timeout); pendingScroll.current = null; resolve(null); },
+      };
+      scrollRef.current?.scrollTo({ y: target, animated: true });
+    });
+  }
+
   async function submit() {
-    if (submitting.current) return;
+    if (submitting.current || !viewport.height || !ticketSize.height) return;
     submitting.current = true;
+    setPreparing(true);
     onBusyChange?.(true);
-    const created = await form.submit(location.coordinate, location.street);
+    const cutPosition = ticketSlot.y + ticketSize.height - TICKET_EDGE_HEIGHT;
+    const target = getTicketCutOffset(cutPosition, viewport.height, scrollPosition.current);
+    const [created, targetScroll] = await Promise.all([
+      form.submit(location.coordinate, location.street),
+      revealCut(target),
+    ]);
+    if (targetScroll == null) return;
+    setPreparing(false);
     if (!created) {
       submitting.current = false;
       onBusyChange?.(false);
       return;
     }
-    const cutPosition = ticketSlot.y + ticketSize.height - TICKET_EDGE_HEIGHT;
-    const shouldScroll = cutPosition > scrollPosition.current + viewport.height - 160 || cutPosition < scrollPosition.current + 32;
-    const targetScroll = shouldScroll ? Math.max(0, cutPosition - viewport.height + 160) : scrollPosition.current;
-    if (shouldScroll) scrollRef.current?.scrollTo({ y: targetScroll, animated: !motion.reduceMotion });
     setFlightDistance(Math.max(windowHeight * 0.5, viewport.y + ticketSlot.y + ticketSize.height - targetScroll + windowHeight * 0.1 + 32));
     // Unmount the paper first; the effect closes the sheet after that render commits.
-    motion.start(() => setFinishedIncident(created), shouldScroll ? 350 : 0, () => {
+    motion.start(() => setFinishedIncident(created), () => {
       if (onSubmitted && !completionHandled.current) {
         completionHandled.current = true;
         onSubmitted(created);
@@ -130,7 +171,7 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
   return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.screen, { backgroundColor: t.canvas }]}>
     <View style={[styles.shell, { paddingTop: insets.top + 12 }]}>
       <View style={styles.topBar}>
-        <Pressable accessibilityRole="button" accessibilityLabel={step === 0 ? 'Cerrar formulario' : 'Volver al paso anterior'} accessibilityState={{ disabled: form.busy || motion.active }} disabled={form.busy || motion.active} onPress={() => { setValidation(''); if (step === 0) { if (onClose) onClose(); else router.replace('/'); } else setStep(step - 1); }} style={({ pressed }) => [styles.iconButton, { backgroundColor: t.surface, borderColor: t.line, opacity: pressed ? 0.65 : 1 }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={step === 0 ? 'Cerrar formulario' : 'Volver al paso anterior'} accessibilityState={{ disabled: locked }} disabled={locked} onPress={() => { setValidation(''); if (step === 0) { if (onClose) onClose(); else router.replace('/'); } else setStep(step - 1); }} style={({ pressed }) => [styles.iconButton, { backgroundColor: t.surface, borderColor: t.line, opacity: pressed ? 0.65 : 1 }]}>
           <SymbolView name={{ ios: step === 0 ? 'xmark' : 'arrow.left', android: step === 0 ? 'close' : 'arrow_back', web: step === 0 ? 'close' : 'arrow_back' }} size={19} tintColor={t.ink} />
         </Pressable>
         <Text style={[styles.topLabel, { color: t.ink }]}>Nuevo aviso</Text>
@@ -139,7 +180,13 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
       <View accessibilityLabel={`Paso ${step + 1} de ${steps.length}`} style={styles.progress}>
         {steps.map((item, index) => <View key={item.title} style={[styles.progressSegment, { backgroundColor: index <= step ? t.accentSurface : t.line }]} />)}
       </View>
-      <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} scrollEnabled={!motion.active} onLayout={event => { const { y, height } = event.nativeEvent.layout; setViewport(current => current.y === y && current.height === height ? current : { y, height }); }} onScroll={event => { const y = event.nativeEvent.contentOffset.y; scrollPosition.current = y; scrollOffset.setValue(y); }} scrollEventThrottle={16} contentContainerStyle={styles.scrollContent}>
+      <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} scrollEnabled={!motion.active} onLayout={event => { const { y, height } = event.nativeEvent.layout; setViewport(current => current.y === y && current.height === height ? current : { y, height }); }} onScroll={event => {
+          if (motion.active) return;
+          const offset = event.nativeEvent.contentOffset.y;
+          syncScroll(offset);
+          const pending = pendingScroll.current;
+          if (pending && Math.abs(offset - pending.target) < 1) pending.finish();
+        }} scrollEventThrottle={16} contentContainerStyle={styles.scrollContent}>
         <View style={styles.intro}>
           <Text accessibilityRole="header" style={[styles.heading, { color: t.ink }]}>{steps[step].title}</Text>
           <Text style={[styles.description, { color: t.muted }]}>{steps[step].description}</Text>
@@ -182,27 +229,28 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
           const { width, height } = event.nativeEvent.layout;
           setTicketSize(current => current.width === width && current.height === height ? current : { width, height });
         }}>
-          {ticketSize.width > 0 && <TicketBackground width={ticketSize.width} height={ticketSize.height} color={t.ticketPaper} ink={t.ticketInk} tear={motion.tear} />}
-          <IncidentTicketContent draft incident={{ title: form.title, description: form.description, category: form.category, status: null, registeredAt: form.registeredAt.toISOString(), latitude: location.coordinate?.latitude ?? null, longitude: location.coordinate?.longitude ?? null, normalizedAddress: location.street }} onChangeLocation={() => setStep(3)} />
+          {ticketSize.width > 0 && <TicketBackground width={ticketSize.width} height={ticketSize.height} color={t.ticketPaper} ink={t.ticketInk} showTearEdge />}
+          <IncidentTicketContent draft incident={{ title: form.title, description: form.description, category: form.category, status: null, registeredAt: form.registeredAt.toISOString(), latitude: location.coordinate?.latitude ?? null, longitude: location.coordinate?.longitude ?? null, normalizedAddress: location.street }} onChangeLocation={() => { if (!locked) setStep(3); }} />
           <View style={{ height: TICKET_EDGE_HEIGHT }} /></Animated.View>
           {ticketSize.width > 0 && <Animated.View pointerEvents="none" style={[styles.ticketStrip, { top: ticketSize.height - TICKET_EDGE_HEIGHT, width: ticketSize.width, height: stripHeight, opacity: motion.fade, transformOrigin: [ticketSize.width, 0, 0], transform: [
             { translateY: motion.fall.interpolate({ inputRange: [0, 1], outputRange: [0, windowHeight + stripHeight] }) },
             { translateX: motion.fall.interpolate({ inputRange: [0, 1], outputRange: [0, -18] }) },
             { rotate: Animated.add(motion.tear, motion.fall).interpolate({ inputRange: [0, 1, 2], outputRange: ['0deg', '-2deg', '-10deg'] }) },
-          ] }]}><TicketStrip width={ticketSize.width} height={stripHeight} color={t.ticketPaper} ink={t.ticketInk} tear={motion.tear} />
-            <Animated.View pointerEvents="none" style={{ position: 'absolute', top: -1, left: 0, width: ticketSize.width, height: TICKET_EDGE_HEIGHT + 2, overflow: 'hidden', borderLeftWidth: 0.75, borderRightWidth: 0.75, borderColor: 'rgba(0, 0, 0, 0.07)', transformOrigin: [ticketSize.width, 0, 0], transform: [{ scaleX: motion.tear.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }] }}>
-              <PaperSwatch width={ticketSize.width} height={TICKET_EDGE_HEIGHT + 2} color={t.ticketPaper} ink={t.ticketInk} />
+          ] }]}><TicketStrip width={ticketSize.width} height={stripHeight} color={t.ticketPaper} ink={t.ticketInk} />
+            <Animated.View pointerEvents="none" style={[styles.tearClip, { width: ticketSize.width, transform: [{ translateX: tearOffset }] }]}>
+              <Animated.View style={[styles.attachedSwatch, { transform: [{ translateX: Animated.multiply(tearOffset, -1) }] }]}>
+                <PaperSwatch width={ticketSize.width} height={TICKET_EDGE_HEIGHT + 2} color={t.ticketPaper} ink={t.ticketInk} guideColor={t.ticketLine} />
+              </Animated.View>
             </Animated.View>
-            <TearGuide width={ticketSize.width} color={t.ticketLine} tear={motion.tear} />
           </Animated.View>}
         </Animated.View>
         </Animated.View>
       </View>}
       <View pointerEvents="box-none" style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         {!!form.error && step === 4 && <View style={[styles.errorBanner, { backgroundColor: t.surface, borderColor: t.error }]}><Text accessibilityRole="alert" accessibilityLiveRegion="polite" selectable style={[styles.error, { color: t.error }]}>{form.error}</Text></View>}
-        <Animated.View pointerEvents={motion.active ? 'none' : 'auto'} style={{ opacity: motion.button, transform: [{ scale: motion.button.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }}><GlassSurface refractive style={[styles.primaryGlass, { borderColor: t.glassEdge }]}><Pressable accessibilityRole="button" accessibilityState={{ disabled: form.busy || motion.active || (step === 3 && resolving), busy: form.busy || (step === 3 && resolving) }} disabled={form.busy || motion.active || (step === 3 && resolving)} onPress={() => step === 4 ? void submit() : next()} style={({ pressed }) => [styles.primaryButton, { opacity: pressed || form.busy || (step === 3 && resolving) ? 0.65 : 1 }]}>
+        <Animated.View pointerEvents={motion.active ? 'none' : 'auto'} style={{ opacity: motion.button, transform: [{ scale: motion.button.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }}><GlassSurface refractive style={[styles.primaryGlass, { borderColor: t.glassEdge }]}><Pressable accessibilityRole="button" accessibilityState={{ disabled: primaryDisabled, busy: form.busy || preparing || (step === 3 && resolving) }} disabled={primaryDisabled} onPress={() => step === 4 ? void submit() : next()} style={({ pressed }) => [styles.primaryButton, { opacity: pressed || primaryDisabled ? 0.65 : 1 }]}>
 
-          {form.busy || (step === 3 && resolving) ? <ActivityIndicator color={t.accent} /> : <><Text style={[styles.buttonText, { color: t.ink }]}>{step === 4 ? 'Reportar incidencia' : 'Siguiente'}</Text><SymbolView name={{ ios: step === 4 ? 'checkmark' : 'arrow.right', android: step === 4 ? 'check' : 'arrow_forward', web: step === 4 ? 'check' : 'arrow_forward' }} size={19} tintColor={t.accent} /></>}
+          {form.busy || preparing || (step === 3 && resolving) ? <ActivityIndicator color={t.accent} /> : <><Text style={[styles.buttonText, { color: t.ink }]}>{step === 4 ? 'Reportar incidencia' : 'Siguiente'}</Text><SymbolView name={{ ios: step === 4 ? 'checkmark' : 'arrow.right', android: step === 4 ? 'check' : 'arrow_forward', web: step === 4 ? 'check' : 'arrow_forward' }} size={19} tintColor={t.accent} /></>}
         </Pressable></GlassSurface></Animated.View>
       </View>
     </View>
@@ -214,6 +262,8 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, gap: 12 }, iconButton: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: 'center', justifyContent: 'center' }, topLabel: { flex: 1, fontSize: 15, fontWeight: '700' }, stepCount: { fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] }, progress: { flexDirection: 'row', gap: 5, paddingHorizontal: 20, marginTop: 20 }, progressSegment: { height: 4, flex: 1, borderRadius: 2 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 32, paddingBottom: 112, gap: 24, flexGrow: 1 }, intro: { gap: 8 }, heading: { fontSize: 30, lineHeight: 37, fontWeight: '700', letterSpacing: -0.5 }, description: { fontSize: 15, lineHeight: 22 }, formGroup: { gap: 22 }, field: { gap: 9 }, label: { fontSize: 14, fontWeight: '700' }, input: { minHeight: 54, borderWidth: 1, borderRadius: 14, borderCurve: 'continuous', paddingHorizontal: 16, paddingVertical: 14, fontSize: 16 }, textarea: { minHeight: 180, textAlignVertical: 'top' }, hint: { fontSize: 13, lineHeight: 19 },
   optionList: { gap: 10 }, option: { minHeight: 74, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderWidth: 1, borderRadius: 16, borderCurve: 'continuous' }, optionIcon: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, optionCopy: { flex: 1, gap: 3 }, optionTitle: { fontSize: 15, fontWeight: '700' }, optionDetail: { fontSize: 13, lineHeight: 18 }, radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' }, radioDot: { width: 10, height: 10, borderRadius: 5 }, inline: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 14 }, noticeBox: { padding: 16, borderRadius: 14, gap: 8 }, notice: { padding: 14, borderRadius: 12, overflow: 'hidden', fontSize: 14, lineHeight: 20 }, link: { fontSize: 14, fontWeight: '700', paddingVertical: 4 }, error: { fontSize: 14, lineHeight: 20 },
+  tearClip: { position: 'absolute', top: -1, left: 0, height: TICKET_EDGE_HEIGHT + 2, overflow: 'hidden' },
+  attachedSwatch: { height: TICKET_EDGE_HEIGHT + 2, borderLeftWidth: 0.75, borderRightWidth: 0.75, borderColor: 'rgba(0, 0, 0, 0.07)' },
   paperViewport: { position: 'absolute', left: 0, right: 0, zIndex: 10 }, paperStack: { paddingBottom: PAPER_SCROLL_EXTENSION }, ticketStrip: { position: 'absolute', left: 0 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 14, gap: 8, zIndex: 20 }, errorBanner: { padding: 12, borderWidth: 1, borderRadius: 12 }, primaryGlass: { borderRadius: 30, borderCurve: 'continuous', borderWidth: 1, boxShadow: '0 7px 20px rgba(15, 56, 58, 0.14)' }, primaryButton: { minHeight: 56, borderRadius: 30, borderCurve: 'continuous', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 }, buttonText: { fontSize: 16, fontWeight: '700' },
 });

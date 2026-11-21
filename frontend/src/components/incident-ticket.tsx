@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
 import { Fonts } from '@/constants/theme';
@@ -49,14 +49,14 @@ export function TicketHeader({ title, status, draft = false, compact = false }: 
   </View>;
 }
 
-function TicketPhoto({ uri }: { uri?: string | null }) {
+export function TicketPhoto({ uri, compact = false, style }: { uri?: string | null; compact?: boolean; style?: StyleProp<ViewStyle> }) {
   const theme = useTheme();
   const [failed, setFailed] = useState(false);
-  return <View style={[styles.photo, Platform.OS === 'web' && styles.monochromePhoto]}>
+  return <View style={[compact ? styles.thumbnail : styles.photo, compact && { backgroundColor: theme.backgroundElement }, Platform.OS === 'web' && styles.monochromePhoto, style]}>
     {uri && !failed ? <Image source={{ uri }} contentFit="cover" accessibilityLabel="Imagen de la incidencia" onError={() => setFailed(true)} style={StyleSheet.absoluteFill} /> :
-      <View accessibilityLabel="Sin imagen" style={styles.photoPlaceholder}>
-        <SymbolView name={{ ios: 'photo', android: 'image', web: 'image' }} size={28} tintColor={theme.ticketMuted} />
-        <Text style={[styles.placeholderText, { color: theme.ticketMuted }]}>Sin imagen</Text>
+      <View accessibilityLabel="Sin imagen" style={[styles.photoPlaceholder, compact && styles.thumbnailPlaceholder]}>
+        <SymbolView name={{ ios: 'photo', android: 'image', web: 'image' }} size={compact ? 20 : 28} tintColor={compact ? theme.muted : theme.ticketMuted} />
+        {!compact && <Text style={[styles.placeholderText, { color: theme.ticketMuted }]}>Sin imagen</Text>}
       </View>}
   </View>;
 }
@@ -140,6 +140,8 @@ export function IncidentTicketContent({ incident, draft = false, onChangeLocatio
 }
 
 const styles = StyleSheet.create({
+  thumbnail: { width: 64, height: 64, borderRadius: 10, borderCurve: 'continuous', overflow: 'hidden' },
+  thumbnailPlaceholder: { minHeight: 0 },
   monochromePhoto: { filter: 'grayscale(1)' },
   mapFooter: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
   mapCredits: { flexShrink: 1, fontSize: 11, lineHeight: 16 },

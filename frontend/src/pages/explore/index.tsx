@@ -44,13 +44,13 @@ type ExploreMapProps = {
   onPressIncident?: (item: MapItem) => void;
   /** Web: cada valor nuevo reproduce el zoom de entrada del mapa. */
   introKey?: number;
-  /** Se llama cuando el mapa termina de cargar. */
-  onMapReady?: () => void;
+  /** Se llama cuando el mapa termina de cargar o muestra un error. */
+  onMapSettled?: () => void;
   /** Web: botones de zoom de cristal en vertical, junto al margen izquierdo (`leftInset`). */
   zoomControls?: boolean;
 };
 
-export function ExploreMap({ filters, controlsInset, fadeHeight, topEdge = 'transition', leftInset = 0, rightInset = 0, openLabel = 'Abrir incidencia', onOpenIncident, onPressIncident, introKey, onMapReady, zoomControls = false }: ExploreMapProps) {
+export function ExploreMap({ filters, controlsInset, fadeHeight, topEdge = 'transition', leftInset = 0, rightInset = 0, openLabel = 'Abrir incidencia', onOpenIncident, onPressIncident, introKey, onMapSettled, zoomControls = false }: ExploreMapProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const mapStyle = useIncidentMapStyle();
@@ -113,8 +113,8 @@ export function ExploreMap({ filters, controlsInset, fadeHeight, topEdge = 'tran
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 });
   const [previewHeight, setPreviewHeight] = useState(160);
   const locations = incidents.data;
-  const handleLoaded = useCallback(() => { setMapStatus('ready'); onMapReady?.(); }, [onMapReady]);
-  const handleError = useCallback(() => setMapStatus('error'), []);
+  const handleLoaded = useCallback(() => { setMapStatus('ready'); onMapSettled?.(); }, [onMapSettled]);
+  const handleError = useCallback(() => { setMapStatus('error'); onMapSettled?.(); }, [onMapSettled]);
   const hoverPreview = !!onPressIncident;
   const [zoomRequest, setZoomRequest] = useState<{ key: number; delta: number } | undefined>();
   const zoom = (delta: number) => setZoomRequest(current => ({ key: (current?.key ?? 0) + 1, delta }));

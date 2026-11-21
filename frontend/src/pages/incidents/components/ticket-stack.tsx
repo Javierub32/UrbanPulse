@@ -1,3 +1,4 @@
+import { Link, type Href } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, Animated, BackHandler, Easing, findNodeHandle, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -11,47 +12,54 @@ import type { IncidentDetail, IncidentListItem } from '@/types/incidents';
 
 type TicketSummary = Pick<IncidentListItem, 'id' | 'title' | 'status'>;
 export type SelectedTicket = { incident: TicketSummary; frame: { x: number; y: number; width: number }; last: boolean };
-export type TicketArrival = { id: string; progress: Animated.Value };
+export type TicketArrival = { id: string; progress: Animated.Value; fromBottom?: number };
 export const TICKET_STACK_STEP = TICKET_TITLE_AREA_HEIGHT;
 const STACK_PAPER_HEIGHT = TICKET_STACK_STEP + 32;
 const TICKET_OVERSHOOT = -3;
+const TICKET_RISE_DURATION = 250;
+const TICKET_SETTLE_DURATION = 100;
 
 type StackItemProps = {
   incident: IncidentListItem;
-  selected: boolean;
+  selected?: boolean;
   detail?: ReturnType<typeof useTicketDetail>;
-  progress: Animated.Value;
-  travel: number;
+  progress?: Animated.Value;
+  travel?: number;
   arrival?: TicketArrival;
   reduceMotion: boolean;
-  onArrivalFinished: (id: string) => void;
-  onSelect: (selection: SelectedTicket, restoreFocus: () => void) => void;
+  onArrivalFinished?: (id: string) => void;
+  onSelect?: (selection: SelectedTicket, restoreFocus: () => void) => void;
+  href?: Href;
+  nativeID?: string;
 };
 
-export function TicketStackItem({ incident, selected, detail, progress, travel, arrival, reduceMotion, onArrivalFinished, onSelect }: StackItemProps) {
+export function TicketStackItem({ incident, selected, detail, progress, travel = 0, arrival, reduceMotion, onArrivalFinished, onSelect, href, nativeID }: StackItemProps) {
   const last = !!detail;
   const theme = useTheme();
   const ref = useRef<View>(null);
-  const slide = progress.interpolate({ inputRange: [0, 1], outputRange: [0, travel] });
+  const slide = progress?.interpolate({ inputRange: [0, 1], outputRange: [0, travel] });
   const entering = arrival?.id === incident.id ? arrival.progress : undefined;
+  const fromBottom = arrival?.fromBottom;
   const makingRoom = !entering && !reduceMotion ? arrival?.progress : undefined;
   const arrivalOffset = entering && !reduceMotion
-    ? entering.interpolate({ inputRange: [0, 1, 2], outputRange: [32, TICKET_OVERSHOOT, 0] })
+    ? entering.interpolate({ inputRange: [0, 1, 2], outputRange: [fromBottom ?? 32, TICKET_OVERSHOOT, 0] })
     : makingRoom?.interpolate({ inputRange: [0, 1, 2], outputRange: [-TICKET_STACK_STEP, TICKET_OVERSHOOT, 0] });
-  const arrivalOpacity = last && entering && !reduceMotion
+  const arrivalOpacity = last && entering && !reduceMotion && fromBottom === undefined
     ? entering.interpolate({ inputRange: [0, 0.45], outputRange: [0, 1], extrapolate: 'clamp' })
     : 1;
 
   useLayoutEffect(() => {
     if (!entering) return;
     // Let the row mount before starting, including when FlatList has to scroll to it.
+    const rise = fromBottom === undefined ? TICKET_RISE_DURATION : 240;
+    const riseEasing = fromBottom === undefined ? Easing.cubic : Easing.quad;
     const animation = Animated.sequence([
-      Animated.timing(entering, { toValue: 1, duration: reduceMotion ? 0 : 250, easing: Easing.out(Easing.cubic), useNativeDriver: true, isInteraction: false }),
-      Animated.timing(entering, { toValue: 2, duration: reduceMotion ? 0 : 100, easing: Easing.out(Easing.quad), useNativeDriver: true, isInteraction: false }),
+      Animated.timing(entering, { toValue: 1, duration: reduceMotion ? 0 : rise, easing: Easing.out(riseEasing), useNativeDriver: true, isInteraction: false }),
+      Animated.timing(entering, { toValue: 2, duration: reduceMotion ? 0 : TICKET_SETTLE_DURATION, easing: Easing.out(Easing.quad), useNativeDriver: true, isInteraction: false }),
     ]);
-    const frame = requestAnimationFrame(() => animation.start(({ finished }) => { if (finished) onArrivalFinished(incident.id); }));
+    const frame = requestAnimationFrame(() => animation.start(({ finished }) => { if (finished) onArrivalFinished?.(incident.id); }));
     return () => { cancelAnimationFrame(frame); animation.stop(); };
-  }, [entering, incident.id, reduceMotion, onArrivalFinished]);
+  }, [entering, incident.id, reduceMotion, onArrivalFinished, fromBottom]);
 
   const restoreFocus = () => {
     if (Platform.OS === 'web') (ref.current as unknown as { focus?: (options?: { preventScroll?: boolean }) => void } | null)?.focus?.({ preventScroll: true });
@@ -60,10 +68,26 @@ export function TicketStackItem({ incident, selected, detail, progress, travel, 
       if (node != null) AccessibilityInfo.setAccessibilityFocus(node);
     }
   };
-  return <Animated.View style={[!last && styles.stackItem, { zIndex: last ? 1 : 0, opacity: selected ? 0 : arrivalOpacity, transform: [{ translateY: arrivalOffset ? Animated.add(slide, arrivalOffset) : slide }] }]}>
-    <Pressable ref={ref} collapsable={false} accessibilityRole="button" accessibilityLabel={`Abrir aviso: ${incident.title?.trim() || 'Sin título'}`} onPress={() => ref.current?.measureInWindow((x, y, width) => onSelect({ incident, frame: { x, y, width }, last }, restoreFocus))} style={({ pressed }) => [last ? styles.lastPaper : styles.stackPaper, { backgroundColor: last ? 'transparent' : theme.ticketPaper, opacity: pressed ? 0.85 : 1 }]}>
+  // Link's slot merges style objects, so its direct child must use a flattened style.
+  const paperStyle = StyleSheet.flatten([
+    last ? styles.lastPaper : styles.stackPaper,
+    { backgroundColor: last ? 'transparent' : theme.ticketPaper },
+  ]);
+  const ticket = (
+    <Pressable
+      ref={ref}
+      nativeID={nativeID}
+      collapsable={false}
+      accessibilityRole={href ? 'link' : 'button'}
+      accessibilityLabel={`Abrir aviso: ${incident.title?.trim() || 'Sin título'}`}
+      onPress={onSelect ? () => ref.current?.measureInWindow((x, y, width) => onSelect({ incident, frame: { x, y, width }, last }, restoreFocus)) : undefined}
+      style={href ? paperStyle : ({ pressed }) => [paperStyle, { opacity: pressed ? 0.85 : 1 }]}>
       {detail ? <TicketDetail incident={incident} detail={detail} allowRetry={false} /> : <><TicketHeader compact title={incident.title} status={incident.status} /><View style={styles.stackTail} /></>}
     </Pressable>
+  );
+  const translateY = slide && arrivalOffset ? Animated.add(slide, arrivalOffset) : arrivalOffset ?? slide ?? 0;
+  return <Animated.View style={[!last && styles.stackItem, { zIndex: last ? 1 : 0, opacity: selected ? 0 : arrivalOpacity, transform: [{ translateY }] }]}>
+    {href ? <Link href={href} asChild>{ticket}</Link> : ticket}
   </Animated.View>;
 }
 
@@ -95,10 +119,9 @@ export function TicketDetail({ incident, detail, allowRetry = true, footerSpace 
   const theme = useTheme();
   const { state, retry } = detail;
   const [paperSize, setPaperSize] = useState({ width: 0, height: 0 });
-  const [tear] = useState(() => new Animated.Value(0));
 
   return <View style={paperSize.width === 0 ? { backgroundColor: theme.ticketPaper } : undefined} onLayout={event => { const { width, height } = event.nativeEvent.layout; setPaperSize(current => current.width === width && current.height === height ? current : { width, height }); }}>
-    {paperSize.width > 0 && <TicketBackground width={paperSize.width} height={paperSize.height} color={theme.ticketPaper} ink={theme.ticketInk} tear={tear} />}
+    {paperSize.width > 0 && <TicketBackground width={paperSize.width} height={paperSize.height} color={theme.ticketPaper} ink={theme.ticketInk} />}
     <View pointerEvents="none" style={[styles.paperTopShadow, { backgroundColor: theme.ticketPaper }]} />
     {state.status === 'success' ? <IncidentTicketContent incident={state.data} /> : <>
       <TicketHeader title={incident.title} status={incident.status} />
