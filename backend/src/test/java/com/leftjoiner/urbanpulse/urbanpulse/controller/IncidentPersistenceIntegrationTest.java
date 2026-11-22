@@ -12,6 +12,9 @@ import com.leftjoiner.urbanpulse.urbanpulse.repository.IncidentRepository;
 import com.leftjoiner.urbanpulse.urbanpulse.repository.UserRepository;
 import java.util.UUID;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 import org.locationtech.jts.geom.Point;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -159,6 +162,60 @@ class IncidentPersistenceIntegrationTest {
     }
 
     @Test
+    void mapAndMembersShareExclusiveEndOfDateRange() throws Exception {
+        UserEntity user = createUser(UserRole.CITIZEN);
+        String token = jwtService.issue(user.getId(), user.getRole());
+        jdbc.update("""
+            INSERT INTO "Incident" ("id", "userId", "title", "category", "status", "location", "registeredAt")
+            SELECT gen_random_uuid(), ?, 'Fecha', 'WASTE', 'REPORTED', ST_SetSRID(ST_MakePoint(-6, 8), 4326), stamp
+            FROM (VALUES (TIMESTAMP '2026-01-07 00:00:00'), (TIMESTAMP '2026-01-07 23:59:59'),
+                         (TIMESTAMP '2026-01-08 00:00:00')) dates(stamp)
+            """, user.getId());
+        mockMvc.perform(get("/api/incidents/map").header("Authorization", "Bearer " + token)
+                .param("west", "-6.1").param("south", "7.9").param("east", "-5.9").param("north", "8.1").param("zoom", "15")
+                .param("since", "2026-01-07T00:00:00Z").param("until", "2026-01-08T00:00:00Z"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].count").value(2));
+        mockMvc.perform(get("/api/incidents/map-members").header("Authorization", "Bearer " + token)
+                .param("west", "-6").param("south", "8").param("east", "-6").param("north", "8")
+                .param("since", "2026-01-07T00:00:00Z").param("until", "2026-01-08T00:00:00Z"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2));
+        mockMvc.perform(get("/api/incidents/map").header("Authorization", "Bearer " + token)
+                .param("west", "-6.1").param("south", "7.9").param("east", "-5.9").param("north", "8.1").param("zoom", "15")
+                .param("since", "2026-01-08T00:00:00Z").param("until", "2026-01-07T00:00:00Z"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void statusGroupsFilterMapAndClusterMembersConsistently() throws Exception {
+        UserEntity user = createUser(UserRole.CITIZEN);
+        UserEntity other = createUser(UserRole.CITIZEN);
+        String token = jwtService.issue(user.getId(), user.getRole());
+        jdbc.update("""
+            INSERT INTO "Incident" ("id", "userId", "title", "category", "status", "location")
+            VALUES (gen_random_uuid(), ?, 'Activo', 'WASTE', 'REPORTED', ST_SetSRID(ST_MakePoint(-7, 8), 4326)),
+                   (gen_random_uuid(), ?, 'Resuelto', 'WASTE', 'RESOLVED', ST_SetSRID(ST_MakePoint(-7, 8), 4326)),
+                   (gen_random_uuid(), ?, 'Cerrado', 'WASTE', 'CLOSED', ST_SetSRID(ST_MakePoint(-7, 8), 4326)),
+                   (gen_random_uuid(), ?, 'Rechazado', 'WASTE', 'REJECTED', ST_SetSRID(ST_MakePoint(-7, 8), 4326)),
+                   (gen_random_uuid(), ?, 'Ajeno', 'WASTE', 'RESOLVED', ST_SetSRID(ST_MakePoint(-7, 8), 4326))
+            """, user.getId(), user.getId(), user.getId(), user.getId(), other.getId());
+        for (String group : new String[] {"ACTIVE", "RESOLVED"}) {
+            int count = group.equals("ACTIVE") ? 1 : 2;
+            mockMvc.perform(get("/api/incidents/map").header("Authorization", "Bearer " + token)
+                    .param("west", "-7.1").param("south", "7.9").param("east", "-6.9").param("north", "8.1")
+                    .param("zoom", "15").param("statusGroup", group))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$[0].count").value(count));
+            mockMvc.perform(get("/api/incidents/map-members").header("Authorization", "Bearer " + token)
+                    .param("west", "-7").param("south", "8").param("east", "-7").param("north", "8")
+                    .param("statusGroup", group))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(count));
+        }
+        mockMvc.perform(get("/api/incidents/map").header("Authorization", "Bearer " + token)
+                .param("west", "-7.1").param("south", "7.9").param("east", "-6.9").param("north", "8.1")
+                .param("zoom", "15").param("statusGroup", "OTHER"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void documentsIncidentResponsesAndErrorExtensions() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
@@ -206,6 +263,8 @@ class IncidentPersistenceIntegrationTest {
             String token = jwtService.issue(denied.getId(), denied.getRole());
             mockMvc.perform(get("/api/incidents/{id}", ownId).header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
             mockMvc.perform(get("/api/incidents/public").header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
+            mockMvc.perform(get("/api/incidents").header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
+            mockMvc.perform(get("/api/incidents/summary").header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
             mockMvc.perform(get("/api/incidents/map").header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
         }
         mockMvc.perform(get("/api/incidents/public")).andExpect(status().isUnauthorized());
@@ -217,6 +276,14 @@ class IncidentPersistenceIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertTrue(techList.contains(otherId.toString()));
         assertFalse(techList.contains(ownId.toString()));
+        mockMvc.perform(get("/api/incidents").header("Authorization", "Bearer " + technicianToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(otherId.toString()));
+        mockMvc.perform(get("/api/incidents").header("Authorization", "Bearer " + unrelatedToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(0));
+        mockMvc.perform(get("/api/incidents").header("Authorization", "Bearer " + operatorToken).param("size", "1"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.nextPageToken").isString());
         for (var entry : java.util.Map.of(ownerToken, 1, technicianToken, 1, operatorToken, 2, unrelatedToken, 0).entrySet()) {
             String mapBody = mockMvc.perform(get("/api/incidents/map").header("Authorization", "Bearer " + entry.getKey())
                     .param("west", "41.9").param("south", "19.9").param("east", "42.1").param("north", "20.1").param("zoom", "15"))
@@ -230,6 +297,86 @@ class IncidentPersistenceIntegrationTest {
         }
         mockMvc.perform(get("/api/incidents/map")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/incidents/map-members")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void cursorKeepsItsPositionWhenAnIncidentArrivesAndOrdersEqualDatesById() throws Exception {
+        var owner = createUser(UserRole.CITIZEN);
+        var other = createUser(UserRole.CITIZEN);
+        String auth = "Bearer " + jwtService.issue(owner.getId(), owner.getRole());
+        LocalDateTime date = LocalDateTime.parse("2026-01-05T12:00:00.123456");
+        UUID first = UUID.fromString("00000000-1111-aaaa-aaaa-000000000003");
+        UUID second = UUID.fromString("00000000-1111-aaaa-aaaa-000000000002");
+        UUID third = UUID.fromString("00000000-1111-aaaa-aaaa-000000000001");
+        UUID undated = UUID.fromString("00000000-1111-aaaa-aaaa-000000000004");
+        UUID inserted = UUID.fromString("00000000-1111-aaaa-aaaa-000000000005");
+        insertListIncident(first, owner.getId(), date, "Farola", "Calle Málaga");
+        insertListIncident(second, owner.getId(), date, "Málaga", null);
+        insertListIncident(third, owner.getId(), date, "Málaga", null);
+        insertListIncident(undated, owner.getId(), null, "Málaga", null);
+        insertListIncident(UUID.randomUUID(), owner.getId(), date.plusDays(1), "Otra ciudad", null);
+        insertListIncident(UUID.randomUUID(), other.getId(), date.plusDays(1), "Málaga", null);
+
+        String body = mockMvc.perform(get("/api/incidents").header("Authorization", auth)
+                        .param("size", "2").param("q", " MALAGA ").param("category", "STREET_LIGHTING")
+                        .param("status", "REPORTED", "REOPENED").param("includeTotal", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].id").value(first.toString()))
+                .andExpect(jsonPath("$.items[0].normalizedAddress").value("Calle Málaga"))
+                .andExpect(jsonPath("$.items[1].id").value(second.toString()))
+                .andExpect(jsonPath("$.totalElements").value(4))
+                .andReturn().getResponse().getContentAsString();
+        String cursor = JsonMapper.builder().build().readTree(body).path("nextPageToken").asString();
+        assertFalse(cursor.isBlank());
+
+        insertListIncident(inserted, owner.getId(), date.plusDays(2), "Málaga", null);
+        mockMvc.perform(get("/api/incidents").header("Authorization", auth)
+                        .param("size", "2").param("q", " MALAGA ").param("category", "STREET_LIGHTING")
+                        .param("status", "REPORTED", "REOPENED").param("pageToken", cursor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].id").value(third.toString()))
+                .andExpect(jsonPath("$.items[1].id").value(undated.toString()))
+                .andExpect(jsonPath("$.nextPageToken").doesNotExist());
+        mockMvc.perform(get("/api/incidents").header("Authorization", auth).param("size", "2")
+                        .param("q", "malaga").param("since", "2026-01-07T12:00:00.123456Z")
+                        .param("until", "2026-01-08T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(inserted.toString()));
+        mockMvc.perform(get("/api/incidents").header("Authorization", auth).param("q", "sin resultados"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(0));
+        mockMvc.perform(get("/api/incidents").header("Authorization", auth).param("size", "101"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_PAGINATION"));
+        mockMvc.perform(get("/api/incidents").header("Authorization", auth).param("pageToken", "mal%formado"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_PAGINATION"));
+        mockMvc.perform(get("/api/incidents")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void summaryCountsOnlyAccessibleIncidentsAndGroupsDaysInTheRequestedZone() throws Exception {
+        var owner = createUser(UserRole.CITIZEN);
+        var other = createUser(UserRole.CITIZEN);
+        String auth = "Bearer " + jwtService.issue(owner.getId(), owner.getRole());
+        LocalDate day = LocalDate.now(ZoneId.of("Europe/Madrid")).minusDays(1);
+        LocalDateTime utcTime = day.minusDays(1).atTime(23, 30);
+        insertListIncident(UUID.randomUUID(), owner.getId(), utcTime, "Farola", null);
+        insertListIncident(UUID.randomUUID(), owner.getId(), null, "Sin fecha", null);
+        insertListIncident(UUID.randomUUID(), other.getId(), utcTime, "Otra cuenta", null);
+
+        mockMvc.perform(get("/api/incidents/summary").header("Authorization", auth).param("zone", "Europe/Madrid"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(2))
+                .andExpect(jsonPath("$.byStatus.REPORTED").value(2))
+                .andExpect(jsonPath("$.byCategory.STREET_LIGHTING").value(2))
+                .andExpect(jsonPath("$.byDay['" + day + "']").value(1));
+    }
+
+    private void insertListIncident(UUID id, UUID owner, LocalDateTime registeredAt, String title, String address) {
+        jdbc.update("""
+            INSERT INTO "Incident" ("id", "userId", "title", "normalizedAddress", "category", "status", "registeredAt")
+            VALUES (?, ?, ?, ?, 'STREET_LIGHTING', 'REPORTED', ?)
+            """, id, owner, title, address, registeredAt);
     }
 
     private UserEntity createUser(UserRole role) {

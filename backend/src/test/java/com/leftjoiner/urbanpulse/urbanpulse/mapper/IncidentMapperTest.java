@@ -20,6 +20,7 @@ class IncidentMapperTest {
         IncidentEntity incident = new IncidentEntity();
         incident.setId(UUID.randomUUID());
         incident.setTitle("Farola apagada");
+        incident.setNormalizedAddress("Calle Prueba 1");
         incident.setCategory(IncidentCategory.STREET_LIGHTING);
         incident.setStatus(IncidentStatus.REPORTED);
         incident.setRegisteredAt(LocalDateTime.of(2026, 10, 1, 9, 0));
@@ -29,6 +30,7 @@ class IncidentMapperTest {
 
         assertEquals(incident.getId(), result.getId());
         assertEquals(incident.getTitle(), result.getTitle());
+        assertEquals("Calle Prueba 1", result.getNormalizedAddress());
         assertEquals(incident.getCategory(), result.getCategory());
         assertEquals(incident.getStatus(), result.getStatus());
         assertEquals(incident.getRegisteredAt(), result.getRegisteredAt());
@@ -44,5 +46,6 @@ class IncidentMapperTest {
 
         assertNull(result.getLatitude());
         assertNull(result.getLongitude());
+        assertNull(result.getNormalizedAddress());
     }
 }

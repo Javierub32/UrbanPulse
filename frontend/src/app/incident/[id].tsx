@@ -1,1 +1,1 @@
-export { default } from '@/pages/incident-detail';
+export { default } from '@/pages/incidents/ticket-detail';
