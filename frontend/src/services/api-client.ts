@@ -43,11 +43,13 @@ export async function apiRequest<T>(
   if (externalSignal?.aborted) controller.abort();
   else externalSignal?.addEventListener("abort", abortFromCaller, { once: true });
   if (token) pending.add(controller);
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const isMultipart = options.body instanceof FormData;
+  const timeout = setTimeout(() => controller.abort(), isMultipart ? 60000 : 15000);
   const headers = new Headers(options.headers);
   headers.delete("Authorization");
   headers.set("Accept", "application/json");
-  if (options.body) headers.set("Content-Type", "application/json");
+  if (isMultipart) headers.delete("Content-Type");
+  else if (options.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
   try {
     const response = await fetch(`${apiUrl}${path}`, {
