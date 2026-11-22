@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -14,7 +14,9 @@ import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import LocationMap from "@/pages/report/components/location-map";
 import IncidentDateTimePicker from "@/pages/report/components/incident-date-time-picker";
+import { ReportAttachmentPreview } from "@/pages/report/components/report-attachment-preview";
 import { useReportForm } from "@/pages/report/hooks/use-report-form";
+import { MAX_ATTACHMENTS } from "@/pages/report/services/report-attachments";
 import {
   useReportLocation,
   type LocationMode,
@@ -31,7 +33,7 @@ export default function ReportScreen() {
   const location = useReportLocation();
   const form = useReportForm();
   const [barWidth, setBarWidth] = useState(0);
-  const position = useRef(new Animated.Value(1)).current;
+  const [position] = useState(() => new Animated.Value(1));
   useEffect(() => {
     Animated.timing(position, {
       toValue: options.findIndex((option) => option.value === location.mode),
@@ -45,7 +47,7 @@ export default function ReportScreen() {
   const needsLocationSelection = location.mode === "assets"
     || !location.coordinate
     || (location.mode === "current" && location.status !== "idle");
-  const isSubmitDisabled = form.busy || isLocationResolving || needsLocationSelection;
+  const isSubmitDisabled = form.busy || (!form.createdIncidentId && (isLocationResolving || needsLocationSelection));
 
   return (
     <ScrollView
@@ -65,7 +67,7 @@ export default function ReportScreen() {
         </ThemedText>
       </View>
       <View
-        pointerEvents={form.busy ? "none" : "auto"}
+        pointerEvents={form.busy || form.createdIncidentId ? "none" : "auto"}
         style={{ gap: Spacing.four }}
       >
         <View style={{ gap: Spacing.two }}>
@@ -141,6 +143,43 @@ export default function ReportScreen() {
         <View style={{ gap: Spacing.two }}>
           <ThemedText type="smallBold">Fecha y hora de la incidencia</ThemedText>
           <IncidentDateTimePicker value={form.registeredAt} onChange={form.setRegisteredAt} disabled={form.busy} />
+        </View>
+        <View style={{ gap: Spacing.two }}>
+          <ThemedText type="smallBold">Fotos y vídeos</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Opcional. Hasta {MAX_ATTACHMENTS} archivos JPEG, PNG, MP4 o MOV; máximo 10 MiB cada uno.
+          </ThemedText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Seleccionar fotos y vídeos"
+            accessibilityState={{ disabled: form.busy || !!form.createdIncidentId || form.attachments.length >= MAX_ATTACHMENTS }}
+            disabled={form.busy || !!form.createdIncidentId || form.attachments.length >= MAX_ATTACHMENTS}
+            onPress={() => void form.pickAttachments()}
+            style={({ pressed }) => ({
+              alignSelf: "flex-start", minHeight: 48, justifyContent: "center",
+              paddingHorizontal: Spacing.three, borderRadius: 12,
+              backgroundColor: theme.backgroundElement,
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <ThemedText type="linkPrimary">Seleccionar fotos y vídeos</ThemedText>
+          </Pressable>
+          {form.attachments.length > 0 && (
+            <View style={{ gap: Spacing.two }}>
+              <ThemedText type="small" themeColor="textSecondary">
+                {form.attachments.length} de {MAX_ATTACHMENTS} archivos seleccionados
+              </ThemedText>
+              {form.attachments.map(attachment => (
+                <ReportAttachmentPreview
+                  key={attachment.key}
+                  attachment={attachment}
+                  uploaded={form.uploadedKeys.includes(attachment.key)}
+                  disabled={form.busy || !!form.createdIncidentId}
+                  onRemove={() => form.removeAttachment(attachment.key)}
+                />
+              ))}
+            </View>
+          )}
         </View>
         <View style={{ gap: Spacing.three }}>
           <ThemedText type="smallBold">Ubicación de la incidencia</ThemedText>
@@ -360,6 +399,22 @@ export default function ReportScreen() {
           {form.error}
         </ThemedText>
       ) : null}
+      {form.createdIncidentId && (
+        <View style={{ gap: Spacing.two }}>
+          <ThemedText selectable type="small" themeColor="textSecondary">
+            Incidencia creada ({form.createdIncidentId}). Los archivos pendientes se enviarán al reintentar.
+          </ThemedText>
+          {form.attachments.filter(attachment => !form.uploadedKeys.includes(attachment.key)).map(attachment => (
+            <Pressable key={attachment.key} accessibilityRole="button"
+              accessibilityLabel={`Omitir ${attachment.name}`}
+              disabled={form.busy}
+              onPress={() => form.removeAttachment(attachment.key)}
+              style={({ pressed }) => ({ alignSelf: "flex-start", minHeight: 44, justifyContent: "center", opacity: pressed ? 0.6 : 1 })}>
+              <ThemedText type="linkPrimary">Omitir {attachment.name}</ThemedText>
+            </Pressable>
+          ))}
+        </View>
+      )}
       {form.success ? (
         <ThemedText accessibilityRole="alert">
           Incidencia enviada correctamente.
@@ -367,10 +422,10 @@ export default function ReportScreen() {
       ) : null}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={isLocationResolving
+        accessibilityLabel={form.createdIncidentId ? "Reintentar subida de archivos" : isLocationResolving
           ? "Esperando a determinar la ubicación y la calle"
           : needsLocationSelection ? "Selecciona una ubicación para continuar" : "Enviar incidencia"}
-        accessibilityState={{ disabled: isSubmitDisabled, busy: form.busy || isLocationResolving }}
+        accessibilityState={{ disabled: isSubmitDisabled, busy: form.busy || (!form.createdIncidentId && isLocationResolving) }}
         disabled={isSubmitDisabled}
         onPress={async () => {
           if (
@@ -392,6 +447,10 @@ export default function ReportScreen() {
       >
         {form.busy ? (
           <ActivityIndicator color="#fff" />
+        ) : form.createdIncidentId ? (
+          <ThemedText type="smallBold" style={{ color: "#fff" }}>
+            Reintentar archivos pendientes
+          </ThemedText>
         ) : isLocationResolving ? (
           <>
             <ActivityIndicator color="#fff" />
