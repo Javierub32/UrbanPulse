@@ -8,7 +8,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { categories } from '@/pages/report/services/report-service';
 import { ApiError } from '@/services/api-client';
 import type { IncidentDetail } from '@/types/incidents';
-import { IncidentImage } from './components/incident-image';
+import { IncidentAttachments } from './components/incident-attachments';
 import { getIncidentDetail } from './services/incident-detail-service';
 import { useAuth } from '@/context/AuthContext';
 import { ReviewActions } from './components/review-actions';
@@ -68,13 +68,14 @@ function IncidentDetailContent({ id }: { id: string }) {
     {state.status === 'loading' && <View accessibilityRole="progressbar" accessibilityLabel="Cargando incidencia"><ActivityIndicator /><ThemedText>Cargando incidencia…</ThemedText></View>}
     {state.status === 'error' && <View style={{ gap: Spacing.two }}><ThemedText selectable accessibilityRole="alert">{state.message}</ThemedText>{state.retry && <Pressable accessibilityRole="button" onPress={retry} style={{ minHeight: 44, justifyContent: 'center' }}><ThemedText type="linkPrimary">Reintentar</ThemedText></Pressable>}</View>}
     {state.status === 'success' && <View style={{ width: '100%', maxWidth: 680, alignSelf: 'center', gap: Spacing.four }}>
-      <IncidentImage />
       {session?.user.role === 'OPERATOR' && state.data.status === 'REPORTED' && <ReviewActions incident={state.data} onDone={retry} />}
       <View style={{ gap: Spacing.two }}>
         <View style={{ alignSelf: 'flex-start', backgroundColor: theme.backgroundElement, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: Spacing.one }}><ThemedText type="smallBold" style={{ color: theme.accent }}>{label(state.data.status, statuses)}</ThemedText></View>
         <ThemedText type="subtitle" selectable>{state.data.title || 'Incidencia sin título'}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">{categories.find(item => item.value === state.data.category)?.label ?? state.data.category ?? 'Categoría no disponible'}</ThemedText>
       </View>
+      {session?.accessToken && <IncidentAttachments key={`${id}:${session.accessToken}`}
+        incidentId={id} token={session.accessToken} />}
       <View style={{ gap: Spacing.two }}><ThemedText type="smallBold">Descripción</ThemedText><ThemedText selectable>{state.data.description || 'No disponible'}</ThemedText></View>
       <View style={{ gap: Spacing.two }}><ThemedText type="smallBold">Información</ThemedText>
         {field('Prioridad', label(state.data.priority, priorities))}

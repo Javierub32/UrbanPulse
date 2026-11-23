@@ -22,3 +22,12 @@ export type IncidentDetail = IncidentListItem & {
   history: { previousStatus: string | null; status: string; changedAt: string | null; actorId: string | null; actorName: string | null; reason: string | null; action: string | null }[];
   atmosphericData: { key: string; value: string; unit: string; source: string; observedAt: string | null }[];
 };
+
+export type IncidentAttachment = {
+  id: string;
+  type: 'PHOTO' | 'VIDEO';
+  name: string;
+  size: number;
+  contentType: string;
+  createdAt: string;
+};

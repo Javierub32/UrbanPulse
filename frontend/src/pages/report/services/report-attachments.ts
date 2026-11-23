@@ -1,9 +1,14 @@
 import type { ImagePickerAsset } from 'expo-image-picker';
 
 import { apiRequest } from '@/services/api-client';
+import type { IncidentAttachment } from '@/types/incidents';
 
 export const MAX_ATTACHMENTS = 5;
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+export function canUploadAttachments(platform = process.env.EXPO_OS) {
+  return platform === 'ios' || platform === 'android';
+}
 
 export type ReportAttachment = {
   key: string;
@@ -13,15 +18,6 @@ export type ReportAttachment = {
   mimeType: 'image/jpeg' | 'image/png' | 'video/mp4' | 'video/quicktime';
   kind: 'image' | 'video';
   file?: File;
-};
-
-export type AttachmentResponse = {
-  id: string;
-  type: 'PHOTO' | 'VIDEO';
-  name: string;
-  size: number;
-  contentType: string;
-  createdAt: string;
 };
 
 const formats = {
@@ -72,6 +68,9 @@ export function prepareAttachments(assets: ImagePickerAsset[], existingCount: nu
 }
 
 export function uploadAttachment(incidentId: string, attachment: ReportAttachment) {
+  if (!canUploadAttachments()) {
+    throw new Error('Los archivos solo se pueden adjuntar desde la aplicación móvil.');
+  }
   const body = new FormData();
   if (attachment.file) {
     body.append('file', attachment.file, attachment.name);
@@ -82,7 +81,7 @@ export function uploadAttachment(incidentId: string, attachment: ReportAttachmen
       type: attachment.mimeType,
     } as unknown as Blob);
   }
-  return apiRequest<AttachmentResponse>(
+  return apiRequest<IncidentAttachment>(
     `/api/incidents/${encodeURIComponent(incidentId)}/attachments`,
     { method: 'POST', body },
   );

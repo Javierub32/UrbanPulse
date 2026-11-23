@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { categories, createIncident, type Category } from '../services/report-service';
-import { MAX_ATTACHMENTS, prepareAttachments, uploadPendingAttachments, type ReportAttachment } from '../services/report-attachments';
+import { canUploadAttachments, MAX_ATTACHMENTS, prepareAttachments, uploadPendingAttachments, type ReportAttachment } from '../services/report-attachments';
 import type { Coordinate } from './use-report-location';
 
 export function useReportForm() {
@@ -20,6 +20,7 @@ export function useReportForm() {
   const uploaded = useRef(new Set<string>());
 
   async function pickAttachments() {
+    if (!canUploadAttachments()) return;
     if (pending.current || incidentId.current || attachments.length >= MAX_ATTACHMENTS) return;
     setError('');
     try {
@@ -54,6 +55,9 @@ export function useReportForm() {
   async function submit(coordinate: Coordinate | null, normalizedAddress: string | null) {
     if (pending.current) return false;
     setSuccess(false);
+    if (!canUploadAttachments() && attachments.length > 0) {
+      setError('Los archivos solo se pueden adjuntar desde la aplicación móvil.'); return false;
+    }
     if (!incidentId.current && (!title.trim() || !description.trim() || !category || !coordinate)) {
       setError('Completa el título, la descripción, la categoría y la ubicación.'); return false;
     }

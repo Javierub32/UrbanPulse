@@ -7,10 +7,16 @@ registerHooks({ resolve(specifier, context, nextResolve) {
     ? new URL('../src/services/api-client.ts', import.meta.url).href : specifier, context);
 } });
 
-const { prepareAttachments, uploadAttachment, uploadPendingAttachments, MAX_ATTACHMENT_BYTES } = await import('../src/pages/report/services/report-attachments.ts');
+const { canUploadAttachments, prepareAttachments, uploadAttachment, uploadPendingAttachments, MAX_ATTACHMENT_BYTES } = await import('../src/pages/report/services/report-attachments.ts');
 const { setApiSession } = await import('../src/services/api-client.ts');
 const originalFetch = globalThis.fetch;
-afterEach(() => { globalThis.fetch = originalFetch; setApiSession(null); });
+const originalExpoOs = process.env.EXPO_OS;
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  if (originalExpoOs === undefined) delete process.env.EXPO_OS;
+  else process.env.EXPO_OS = originalExpoOs;
+  setApiSession(null);
+});
 
 const asset = (name, size, type = 'image') => ({ uri: `file:///cache/${name}`, fileName: name, fileSize: size, type });
 
@@ -32,6 +38,7 @@ test('rechaza archivos no permitidos, vacíos, demasiado grandes o más de cinco
 });
 
 test('envía multipart con Bearer y deja que fetch genere el boundary', async () => {
+  process.env.EXPO_OS = 'android';
   const file = new File(['contenido'], 'foto.jpg', { type: 'image/jpeg' });
   const [attachment] = prepareAttachments([{ ...asset('foto.jpg', file.size), file }], 0);
   setApiSession('token-ciudadano');
@@ -44,6 +51,16 @@ test('envía multipart con Bearer y deja que fetch genere el boundary', async ()
     return Response.json({ id: 'attachment-id' }, { status: 201 });
   };
   assert.deepEqual(await uploadAttachment('incident-id', attachment), { id: 'attachment-id' });
+});
+
+test('impide subir adjuntos desde la web', async () => {
+  assert.equal(canUploadAttachments('ios'), true);
+  assert.equal(canUploadAttachments('android'), true);
+  assert.equal(canUploadAttachments('web'), false);
+  process.env.EXPO_OS = 'web';
+  globalThis.fetch = () => { throw new Error('La web no debe enviar el archivo.'); };
+  const [attachment] = prepareAttachments([asset('foto.jpg', 10)], 0);
+  assert.throws(() => uploadAttachment('incident-id', attachment), /aplicación móvil/);
 });
 
 test('tras un fallo, reintenta solo los adjuntos que faltan', async () => {

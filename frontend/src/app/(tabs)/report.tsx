@@ -16,7 +16,7 @@ import LocationMap from "@/pages/report/components/location-map";
 import IncidentDateTimePicker from "@/pages/report/components/incident-date-time-picker";
 import { ReportAttachmentPreview } from "@/pages/report/components/report-attachment-preview";
 import { useReportForm } from "@/pages/report/hooks/use-report-form";
-import { MAX_ATTACHMENTS } from "@/pages/report/services/report-attachments";
+import { canUploadAttachments, MAX_ATTACHMENTS } from "@/pages/report/services/report-attachments";
 import {
   useReportLocation,
   type LocationMode,
@@ -144,7 +144,7 @@ export default function ReportScreen() {
           <ThemedText type="smallBold">Fecha y hora de la incidencia</ThemedText>
           <IncidentDateTimePicker value={form.registeredAt} onChange={form.setRegisteredAt} disabled={form.busy} />
         </View>
-        <View style={{ gap: Spacing.two }}>
+        {canUploadAttachments() && <View style={{ gap: Spacing.two }}>
           <ThemedText type="smallBold">Fotos y vídeos</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             Opcional. Hasta {MAX_ATTACHMENTS} archivos JPEG, PNG, MP4 o MOV; máximo 10 MiB cada uno.
@@ -180,7 +180,7 @@ export default function ReportScreen() {
               ))}
             </View>
           )}
-        </View>
+        </View>}
         <View style={{ gap: Spacing.three }}>
           <ThemedText type="smallBold">Ubicación de la incidencia</ThemedText>
           <View

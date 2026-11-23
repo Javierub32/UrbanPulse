@@ -6,6 +6,10 @@ let onUnauthorized: (() => void) | undefined;
 let sessionVersion = 0;
 const pending = new Set<AbortController>();
 
+export function apiUrlForPath(path: string) {
+  return `${apiUrl}${path}`;
+}
+
 export class ApiError extends Error {
   public status: number;
   public fields: Record<string, string>;
@@ -34,6 +38,7 @@ export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
   authenticated = true,
+  responseType: "json" | "blob" = "json",
 ): Promise<T> {
   const token = authenticated ? accessToken : null;
   const requestVersion = sessionVersion;
@@ -47,18 +52,20 @@ export async function apiRequest<T>(
   const timeout = setTimeout(() => controller.abort(), isMultipart ? 60000 : 15000);
   const headers = new Headers(options.headers);
   headers.delete("Authorization");
-  headers.set("Accept", "application/json");
+  headers.set("Accept", responseType === "blob" ? "*/*" : "application/json");
   if (isMultipart) headers.delete("Content-Type");
   else if (options.body) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
   try {
-    const response = await fetch(`${apiUrl}${path}`, {
+    const response = await fetch(apiUrlForPath(path), {
       ...options,
       headers,
       signal: controller.signal,
       credentials: "omit",
     });
-    const body = await response.json().catch(() => null);
+    const body = response.ok && responseType === "blob"
+      ? await response.blob()
+      : await response.json().catch(() => null);
     if (token && requestVersion !== sessionVersion)
       throw new ApiError(0, "La sesión ha cambiado. Vuelve a intentarlo.");
     if (!response.ok) {

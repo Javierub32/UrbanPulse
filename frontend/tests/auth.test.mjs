@@ -10,6 +10,7 @@ registerHooks({ resolve(specifier, context, nextResolve) {
 const authService = await import('../src/services/auth-service.ts');
 const webStorage = await import('../src/services/token-storage.ts');
 const { getIncidentDetail } = await import('../src/pages/incident-detail/services/incident-detail-service.ts');
+const { getIncidentAttachments, getAttachmentBlob, getAttachmentSource } = await import('../src/pages/incident-detail/services/incident-detail-service.ts');
 
 const originalFetch = globalThis.fetch;
 const originalWindow = globalThis.window;
@@ -25,6 +26,35 @@ test('consulta el detalle con la sesión y transmite errores', async () => {
   assert.deepEqual(await getIncidentDetail('incident-id'), { id: 'incident-id', history: [] });
   globalThis.fetch = async () => Response.json({ detail: 'No encontrada' }, { status: 404 });
   await assert.rejects(getIncidentDetail('incident-id'), error => error instanceof ApiError && error.status === 404);
+});
+
+test('lista y descarga adjuntos privados con la sesión y sin exponer la ruta de MinIO', async () => {
+  setApiSession('token');
+  const attachment = { id: 'photo-id', type: 'PHOTO', name: 'calle.png', size: 4, contentType: 'image/png' };
+  let calls = 0;
+  globalThis.fetch = async (url, options) => {
+    calls++;
+    assert.equal(options.headers.get('Authorization'), 'Bearer token');
+    assert.equal(options.headers.get('Accept'), calls === 1 ? 'application/json' : '*/*');
+    assert.ok(url.endsWith(calls === 1
+      ? '/api/incidents/incident-id/attachments'
+      : '/api/incidents/incident-id/attachments/photo-id'));
+    return calls === 1 ? Response.json([attachment])
+      : new Response(new Uint8Array([1, 2, 3, 4]), { headers: { 'Content-Type': 'image/png' } });
+  };
+  assert.deepEqual(await getIncidentAttachments('incident-id'), [attachment]);
+  assert.deepEqual([...new Uint8Array(await (await getAttachmentBlob('incident-id', 'photo-id')).arrayBuffer())], [1, 2, 3, 4]);
+  const source = getAttachmentSource('incident-id', 'photo-id', 'token');
+  assert.ok(source.uri.endsWith('/api/incidents/incident-id/attachments/photo-id'));
+  assert.deepEqual(source.headers, { Authorization: 'Bearer token' });
+  assert.equal('url' in attachment, false);
+});
+
+test('un adjunto inaccesible no se convierte en imagen y mantiene el error 404', async () => {
+  setApiSession('token');
+  globalThis.fetch = async () => Response.json({ detail: 'No encontrada' }, { status: 404 });
+  await assert.rejects(getIncidentAttachments('incident-id'), error => error instanceof ApiError && error.status === 404);
+  await assert.rejects(getAttachmentBlob('incident-id', 'photo-id'), error => error instanceof ApiError && error.status === 404);
 });
 
 test('restaura solo credenciales válidas que todavía no hayan caducado', () => {
