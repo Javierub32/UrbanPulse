@@ -15,4 +15,5 @@ public class IncidentHistoryResponse {
     private String reason;
     private String action;
     private String actorName;
+    private IncidentAssignmentResponse assignment;
 }

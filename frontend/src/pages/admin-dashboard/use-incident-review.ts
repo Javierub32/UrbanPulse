@@ -15,6 +15,7 @@ const confirmations: Record<ReviewCommand['action'], string> = {
   'request-information': 'Solicitud registrada en el historial.',
   reject: 'Incidencia descartada.',
   validate: 'Incidencia validada.',
+  assign: 'Incidencia asignada.',
 };
 
 function detailError(cause: unknown): ReadError {
@@ -64,10 +65,12 @@ export function useIncidentReview(id: string | undefined) {
     ? (loading ? undefined : result?.error)
     : { message: 'Identificador de incidencia no válido.', retryable: false };
   const reviewable = incident?.status === 'REPORTED';
+  const assignable = incident?.status === 'VALIDATED';
   const locked = busy !== null || loading || !!readError;
 
   async function submit(command: ReviewCommand) {
-    if (!id || !reviewable || locked || inFlight.current) return false;
+    const allowed = command.action === 'assign' ? assignable : reviewable;
+    if (!id || !allowed || locked || inFlight.current) return false;
     inFlight.current = true;
     setBusy(command.action);
     clearFeedback();
@@ -95,5 +98,5 @@ export function useIncidentReview(id: string | undefined) {
     }
   }
 
-  return { incident, busy, loading, readError, notice, actionError, reviewable, locked, refresh, clearFeedback, submit };
+  return { incident, busy, loading, readError, notice, actionError, reviewable, assignable, locked, refresh, clearFeedback, submit };
 }

@@ -1,5 +1,6 @@
 package com.leftjoiner.urbanpulse.urbanpulse.exception;
 
+import com.leftjoiner.urbanpulse.urbanpulse.controller.IncidentAssignmentController;
 import com.leftjoiner.urbanpulse.urbanpulse.controller.IncidentController;
 import com.leftjoiner.urbanpulse.urbanpulse.controller.InitialReviewController;
 import lombok.extern.slf4j.Slf4j;
@@ -9,7 +10,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @Slf4j
-@RestControllerAdvice(assignableTypes = {IncidentController.class, InitialReviewController.class})
+@RestControllerAdvice(assignableTypes = {IncidentController.class, InitialReviewController.class, IncidentAssignmentController.class})
 public class IncidentExceptionHandler extends RequestExceptionHandler {
 
     @ExceptionHandler(UserNotFoundException.class)
@@ -21,6 +22,17 @@ public class IncidentExceptionHandler extends RequestExceptionHandler {
     public ProblemDetail handleIncidentNotFound(IncidentNotFoundException exception) {
         return problem(HttpStatus.NOT_FOUND, "Incidencia no encontrada",
                 "No existe la incidencia indicada.", "INCIDENT_NOT_FOUND");
+    }
+
+    @ExceptionHandler(InvalidAssignmentDestinationException.class)
+    public ProblemDetail handleInvalidAssignmentDestination(InvalidAssignmentDestinationException exception) {
+        return problem(HttpStatus.BAD_REQUEST, "Destino de asignación no válido",
+                exception.getMessage(), "INVALID_ASSIGNMENT_DESTINATION");
+    }
+
+    @ExceptionHandler(IncidentNotAssignableException.class)
+    public ProblemDetail handleIncidentNotAssignable(IncidentNotAssignableException exception) {
+        return problem(HttpStatus.CONFLICT, "Incidencia no asignable", exception.getMessage(), "INCIDENT_NOT_ASSIGNABLE");
     }
 
     @ExceptionHandler(InvalidPaginationException.class)

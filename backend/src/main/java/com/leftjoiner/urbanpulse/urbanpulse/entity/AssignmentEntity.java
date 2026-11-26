@@ -28,8 +28,8 @@ public class AssignmentEntity {
     @JoinColumn(name = "\"incidentId\"", referencedColumnName = "\"id\"", nullable = false)
     private IncidentEntity incident;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "\"technicianId\"", referencedColumnName = "\"id\"", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "\"technicianId\"", referencedColumnName = "\"id\"")
     private UserEntity technician;
 
     @Column(name = "\"department\"")

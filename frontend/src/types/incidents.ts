@@ -15,7 +15,14 @@ export type IncidentListItem = {
   normalizedAddress?: string | null;
 };
 
-// Contrato de la revisión inicial (PR #52): `action` vale INCIDENT_EDITED, VALIDATED, REJECTED o
+export type IncidentAssignment = {
+  department: string | null;
+  team: string | null;
+  technicianId: string | null;
+  technicianName: string | null;
+};
+
+// En la revisión inicial, `action` vale INCIDENT_EDITED, VALIDATED, REJECTED o
 // INFORMATION_REQUESTED; en una edición, `reason` lista los campos cambiados. `actorName` solo llega a operadores.
 export type IncidentHistoryEntry = {
   previousStatus: string | null;
@@ -25,6 +32,7 @@ export type IncidentHistoryEntry = {
   actorName: string | null;
   reason: string | null;
   action: string | null;
+  assignment?: IncidentAssignment | null;
 };
 
 export type IncidentDetail = IncidentListItem & {

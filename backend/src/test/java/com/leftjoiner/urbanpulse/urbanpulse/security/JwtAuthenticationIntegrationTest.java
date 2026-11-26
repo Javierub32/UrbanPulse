@@ -370,6 +370,96 @@ class JwtAuthenticationIntegrationTest {
         assertTrue(json.readTree(citizenDetail.body()).path("history").get(0).path("actorName").isNull());
     }
 
+
+    @Test
+    void operatorAssignsValidatedIncidentsAndRecordsDestinationAndActor() throws Exception {
+        String citizen = token(user(UserRole.CITIZEN));
+        UserEntity operator = user(UserRole.OPERATOR);
+        String operatorToken = token(operator);
+        UserEntity technician = user(UserRole.TECHNICIAN);
+        String technicianToken = token(technician);
+
+        var technicians = send(request("/api/operator/assignments/technicians")
+                .header("Authorization", "Bearer " + operatorToken).GET());
+        assertEquals(200, technicians.statusCode());
+        assertTrue(technicians.body().contains(technician.getId().toString()));
+        assertFalse(technicians.body().contains(operator.getId().toString()));
+        assertFalse(technicians.body().contains(technician.getEmail()));
+
+        for (Map<String, String> destination : List.of(
+                Map.of("department", " Limpieza "), Map.of("team", "Vía pública"),
+                Map.of("technicianId", technician.getId().toString()))) {
+            String id = reportForAssignment(citizen);
+            String path = "/api/operator/assignments/" + id;
+            assertEquals(200, post("/api/operator/reviews/" + id + "/validate", operatorToken, null).statusCode());
+
+            String body = json.writeValueAsString(destination);
+            assertEquals(204, post(path, operatorToken, body).statusCode());
+            assertEquals(409, post(path, operatorToken, body).statusCode());
+
+            var detail = send(request("/api/incidents/" + id).header("Authorization", "Bearer " + operatorToken).GET());
+            assertEquals(200, detail.statusCode());
+            var incident = json.readTree(detail.body());
+            assertEquals("ASSIGNED", incident.path("status").asString());
+            var entries = incident.path("history");
+            assertEquals(2, entries.size());
+            var event = entries.get(1);
+            assertEquals("VALIDATED", event.path("previousStatus").asString());
+            assertEquals("ASSIGNED", event.path("status").asString());
+            assertEquals(operator.getId().toString(), event.path("actorId").asString());
+            assertFalse(event.path("changedAt").asString().isBlank());
+            destination.forEach((field, value) -> assertEquals(value.strip(), event.path("assignment").path(field).asString()));
+            var technicianDetail = send(request("/api/incidents/" + id).header("Authorization", "Bearer " + technicianToken).GET());
+            assertEquals(destination.containsKey("technicianId") ? 200 : 404, technicianDetail.statusCode());
+        }
+    }
+
+    @Test
+    void assignmentRejectsUnauthorizedActorsInvalidStatesAndDestinations() throws Exception {
+        UserEntity citizen = user(UserRole.CITIZEN);
+        String citizenToken = token(citizen);
+        String operator = token(user(UserRole.OPERATOR));
+        UserEntity technician = user(UserRole.TECHNICIAN);
+        technician.setActive(false);
+        users.saveAndFlush(technician);
+
+        String id = reportForAssignment(citizenToken);
+        String path = "/api/operator/assignments/" + id;
+        String department = "{\"department\":\"Limpieza\"}";
+        assertEquals(403, post(path, citizenToken, department).statusCode());
+        assertUnauthenticated(send(request(path).header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(department))));
+        assertEquals(409, post(path, operator, department).statusCode());
+        assertEquals(404, post("/api/operator/assignments/" + UUID.randomUUID(), operator, department).statusCode());
+        assertEquals(200, post("/api/operator/reviews/" + id + "/validate", operator, null).statusCode());
+        for (Map<String, String> invalid : List.of(
+                Map.of("team", "  "), Map.of("department", "Limpieza", "team", "A"),
+                Map.of("technicianId", citizen.getId().toString()),
+                Map.of("technicianId", technician.getId().toString()),
+                Map.of("technicianId", UUID.randomUUID().toString()))) {
+            var response = post(path, operator, json.writeValueAsString(invalid));
+            assertEquals(400, response.statusCode());
+            assertEquals("INVALID_ASSIGNMENT_DESTINATION", json.readTree(response.body()).path("code").asString());
+        }
+        var detail = send(request("/api/incidents/" + id).header("Authorization", "Bearer " + operator).GET());
+        var incident = json.readTree(detail.body());
+        assertEquals("VALIDATED", incident.path("status").asString());
+        assertEquals(1, incident.path("history").size());
+    }
+
+    private String reportForAssignment(String token) throws Exception {
+        var result = post("/api/incidents/create", token,
+                "{\"title\":\"Farola\",\"description\":\"Apagada\",\"category\":\"STREET_LIGHTING\",\"latitude\":36.7,\"longitude\":-4.4}");
+        assertEquals(201, result.statusCode());
+        return json.readTree(result.body()).path("id").asString();
+    }
+
+    private HttpResponse<String> post(String path, String token, String body) throws Exception {
+        var builder = request(path).header("Authorization", "Bearer " + token);
+        return body == null ? send(builder.POST(HttpRequest.BodyPublishers.noBody()))
+                : send(builder.header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)));
+    }
+
     private UserEntity user(UserRole role) {
         UserEntity user = new UserEntity();
         user.setName("JWT test citizen");
