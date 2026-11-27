@@ -50,9 +50,13 @@ function InitialLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={!!session}>
+      {/* El operador entra en el panel municipal; el resto de cuentas, en la app ciudadana. */}
+      <Stack.Protected guard={!!session && session.user.role !== "OPERATOR"}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="incident/[id]" options={{ headerShown: true, title: "Detalle de incidencia" }} />
+        <Stack.Screen name="incident/[id]" options={{ presentation: "transparentModal", animation: "none", title: "Detalle del aviso" }} />
+      </Stack.Protected>
+      <Stack.Protected guard={session?.user.role === "OPERATOR"}>
+        <Stack.Screen name="operator" />
       </Stack.Protected>
       <Stack.Protected guard={!session}>
         <Stack.Screen name="(auth)" />

@@ -75,7 +75,7 @@ public class IncidentExceptionHandler extends RequestExceptionHandler {
     @ExceptionHandler(InvalidPaginationException.class)
     public ProblemDetail handleInvalidPagination(InvalidPaginationException exception) {
         return problem(HttpStatus.BAD_REQUEST, "Paginación no válida",
-                "La página o el tamaño solicitados no son válidos.", "INVALID_PAGINATION");
+                exception.getMessage(), "INVALID_PAGINATION");
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

@@ -248,27 +248,42 @@ test('el formulario de incidencias usa Bearer y no envía un usuario de prueba',
   assert.deepEqual(await createIncident(incident), { id: 'incidencia' });
 });
 
-test('el listado usa el cliente común y envía el token', async () => {
-  const { getIncidents } = await import('../src/pages/report/services/report-service.ts');
-  const incidents = [{ id: '1', title: 'Farola', latitude: 40.4, longitude: -3.7 }];
+test('el listado envía filtros y continúa con el cursor opaco del servidor', async () => {
+  const { getIncidentPage, incidentSearch } = await import('../src/services/incidents-service.ts');
+  const search = incidentSearch({ size: 12, statuses: ['REPORTED', 'REOPENED'], query: ' Málaga ', includeTotal: true });
+  const first = { items: [{ id: '1' }], nextPageToken: 'opaque+/=', totalElements: 2 };
+  const second = { items: [{ id: '2' }], nextPageToken: null, totalElements: null };
+  const caller = new AbortController();
   setApiSession('token-ciudadano');
   globalThis.fetch = async (url, options) => {
-    assert.ok(url.endsWith('/api/incidents/public'));
+    const request = new URL(url);
+    assert.equal(request.pathname, '/api/incidents');
     assert.equal(options.headers.get('Authorization'), 'Bearer token-ciudadano');
-    return Response.json(incidents);
+    assert.deepEqual(request.searchParams.getAll('status'), ['REPORTED', 'REOPENED']);
+    assert.equal(request.searchParams.get('q'), 'Málaga');
+    assert.equal(request.searchParams.get('size'), '12');
+    if (request.searchParams.has('pageToken')) {
+      assert.equal(request.searchParams.get('pageToken'), first.nextPageToken);
+      assert.equal(request.searchParams.has('includeTotal'), false);
+      return Response.json(second);
+    }
+    assert.equal(request.searchParams.get('includeTotal'), 'true');
+    return Response.json(first);
   };
-  assert.deepEqual(await getIncidents(), incidents);
+  const page = await getIncidentPage(search, null, caller.signal);
+  assert.deepEqual(page, first);
+  assert.deepEqual(await getIncidentPage(search, page.nextPageToken, caller.signal), second);
 });
 
 test('el listado cancela la petición cuando la pantalla deja de estar activa', async () => {
-  const { getIncidents } = await import('../src/pages/report/services/report-service.ts');
+  const { getIncidentPage, incidentSearch } = await import('../src/services/incidents-service.ts');
   const caller = new AbortController();
   let requestSignal;
   globalThis.fetch = (_url, options) => new Promise((_resolve, reject) => {
     requestSignal = options.signal;
     options.signal.addEventListener('abort', () => reject(new Error('abortada')), { once: true });
   });
-  const request = getIncidents(caller.signal);
+  const request = getIncidentPage(incidentSearch({}), null, caller.signal);
   caller.abort();
   assert.equal(requestSignal.aborted, true);
   await assert.rejects(request, error => error instanceof ApiError && error.status === 0);

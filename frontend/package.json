@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~57.0.21",
+    "@liqui-design/glass": "0.6.0",
     "@maplibre/maplibre-react-native": "^11.5.0",
     "expo": "~57.0.26",
     "expo-constants": "~57.0.20",
@@ -23,6 +24,7 @@
     "expo-system-ui": "~57.0.4",
     "expo-video": "~57.0.5",
     "expo-web-browser": "~57.0.3",
+    "lucide-react-native": "^1.74.0",
     "maplibre-gl": "^5.24.0",
     "nativewind": "^4.2.7",
     "react": "19.2.3",
