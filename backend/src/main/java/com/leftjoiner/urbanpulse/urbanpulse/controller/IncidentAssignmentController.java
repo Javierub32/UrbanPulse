@@ -2,7 +2,7 @@ package com.leftjoiner.urbanpulse.urbanpulse.controller;
 
 import com.leftjoiner.urbanpulse.urbanpulse.dto.IncidentAssignmentRequest;
 import com.leftjoiner.urbanpulse.urbanpulse.dto.ProblemResponseSchema;
-import com.leftjoiner.urbanpulse.urbanpulse.dto.TechnicianOptionResponse;
+import com.leftjoiner.urbanpulse.urbanpulse.dto.AssignmentCatalogOption;
 import com.leftjoiner.urbanpulse.urbanpulse.security.UrbanPulsePrincipal;
 import com.leftjoiner.urbanpulse.urbanpulse.service.IncidentAssignmentService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,17 +38,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class IncidentAssignmentController {
     private final IncidentAssignmentService service;
 
-    @GetMapping("/technicians")
-    @Operation(summary = "Listar técnicos activos disponibles para asignación")
-    @ApiResponse(responseCode = "200", description = "Lista de técnicos activos con identificador y nombre")
-    public List<TechnicianOptionResponse> listTechnicians() {
-        return service.listTechnicians();
+    @GetMapping("/catalog")
+    @Operation(summary = "Consultar departamentos, equipos y técnicos disponibles",
+            description = "Los equipos y técnicos indican su departamento y el número de incidencias asignadas o en curso.")
+    @ApiResponse(responseCode = "200", description = "Catálogo de destinos y carga de trabajo")
+    public List<AssignmentCatalogOption> listOptions() {
+        return service.listOptions();
     }
 
     @PostMapping("/{incidentId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Asignar una incidencia validada",
-            description = "Envía un único destino: department, team o technicianId. La incidencia pasa a ASSIGNED.")
+            description = "Envía departmentId y un único destino de ese departamento: teamId o technicianId. La incidencia pasa a ASSIGNED.")
     @ApiResponses({
         @ApiResponse(responseCode = "204", description = "Asignación registrada"),
         @ApiResponse(responseCode = "400", description = "Destino o petición inválidos",

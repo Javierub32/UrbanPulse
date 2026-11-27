@@ -1,11 +1,19 @@
 import { apiRequest } from '@/services/api-client';
 
-export type AssignmentDestination = { department: string } | { team: string } | { technicianId: string };
+export type AssignmentDestination = {
+  departmentId: string;
+} & ({ teamId: string } | { technicianId: string });
 
-type TechnicianOption = { id: string; name: string | null };
+export type AssignmentCatalogOption = {
+  kind: 'DEPARTMENT' | 'TEAM' | 'TECHNICIAN';
+  id: string;
+  departmentId: string | null;
+  name: string | null;
+  assignedCount: number;
+};
 
-export function getAssignmentTechnicians(signal: AbortSignal) {
-  return apiRequest<TechnicianOption[]>('/api/operator/assignments/technicians', { signal });
+export function getAssignmentCatalog(signal: AbortSignal) {
+  return apiRequest<AssignmentCatalogOption[]>('/api/operator/assignments/catalog', { signal });
 }
 
 export type ReviewCommand =

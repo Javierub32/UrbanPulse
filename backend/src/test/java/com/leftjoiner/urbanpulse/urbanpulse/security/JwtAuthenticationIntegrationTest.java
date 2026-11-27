@@ -371,47 +371,72 @@ class JwtAuthenticationIntegrationTest {
     }
 
 
+    private static final String URBAN_SERVICES = "e8000000-0000-4000-8000-000000000001";
+    private static final String MOBILITY = "e8000000-0000-4000-8000-000000000002";
+    private static final String LIGHTING_TEAM = "e8100000-0000-4000-8000-000000000001";
+    private static final String FIRST_TECHNICIAN = "f5300000-0000-4000-8000-000000000005";
+    private static final String SECOND_TECHNICIAN = "f5300000-0000-4000-8000-000000000006";
+    private static final String OUTSIDE_TECHNICIAN = "e8200000-0000-4000-8000-000000000004";
+    private static final String ASSIGNMENTS = "/api/operator/assignments/";
+
     @Test
-    void operatorAssignsValidatedIncidentsAndRecordsDestinationAndActor() throws Exception {
+    void groupAssignmentsReachAllTeamMembersAndAppearInTheirWorkload() throws Exception {
         String citizen = token(user(UserRole.CITIZEN));
         UserEntity operator = user(UserRole.OPERATOR);
         String operatorToken = token(operator);
-        UserEntity technician = user(UserRole.TECHNICIAN);
-        String technicianToken = token(technician);
+        String first = technicianToken(FIRST_TECHNICIAN);
+        String second = technicianToken(SECOND_TECHNICIAN);
+        String outside = technicianToken(OUTSIDE_TECHNICIAN);
 
-        var technicians = send(request("/api/operator/assignments/technicians")
-                .header("Authorization", "Bearer " + operatorToken).GET());
-        assertEquals(200, technicians.statusCode());
-        assertTrue(technicians.body().contains(technician.getId().toString()));
-        assertFalse(technicians.body().contains(operator.getId().toString()));
-        assertFalse(technicians.body().contains(technician.getEmail()));
+        var before = assignmentCatalog(operatorToken);
+        assertEquals(URBAN_SERVICES, option(before, LIGHTING_TEAM).path("departmentId").asString());
+        assertEquals(MOBILITY, option(before, OUTSIDE_TECHNICIAN).path("departmentId").asString());
+        assertTrue(option(before, operator.getId().toString()).isMissingNode());
 
-        for (Map<String, String> destination : List.of(
-                Map.of("department", " Limpieza "), Map.of("team", "Vía pública"),
-                Map.of("technicianId", technician.getId().toString()))) {
-            String id = reportForAssignment(citizen);
-            String path = "/api/operator/assignments/" + id;
-            assertEquals(200, post("/api/operator/reviews/" + id + "/validate", operatorToken, null).statusCode());
+        String teamIncident = reportForAssignment(citizen);
+        assignValidated(teamIncident, operatorToken, Map.of("departmentId", URBAN_SERVICES, "teamId", LIGHTING_TEAM));
+        String individualIncident = reportForAssignment(citizen);
+        assignValidated(individualIncident, operatorToken,
+                Map.of("departmentId", URBAN_SERVICES, "technicianId", FIRST_TECHNICIAN));
 
-            String body = json.writeValueAsString(destination);
-            assertEquals(204, post(path, operatorToken, body).statusCode());
-            assertEquals(409, post(path, operatorToken, body).statusCode());
+        var detail = getAs("/api/incidents/" + teamIncident, operatorToken);
+        assertEquals(200, detail.statusCode());
+        var incident = json.readTree(detail.body());
+        assertEquals("ASSIGNED", incident.path("status").asString());
+        var history = incident.path("history");
+        assertEquals(2, history.size());
+        var event = history.get(1);
+        assertEquals("VALIDATED", event.path("previousStatus").asString());
+        assertEquals("ASSIGNED", event.path("status").asString());
+        assertEquals(operator.getId().toString(), event.path("actorId").asString());
+        assertFalse(event.path("changedAt").asString().isBlank());
+        assertEquals("Alumbrado", event.path("assignment").path("team").asString());
+        assertEquals("Servicios urbanos", event.path("assignment").path("department").asString());
 
-            var detail = send(request("/api/incidents/" + id).header("Authorization", "Bearer " + operatorToken).GET());
-            assertEquals(200, detail.statusCode());
-            var incident = json.readTree(detail.body());
-            assertEquals("ASSIGNED", incident.path("status").asString());
-            var entries = incident.path("history");
-            assertEquals(2, entries.size());
-            var event = entries.get(1);
-            assertEquals("VALIDATED", event.path("previousStatus").asString());
-            assertEquals("ASSIGNED", event.path("status").asString());
-            assertEquals(operator.getId().toString(), event.path("actorId").asString());
-            assertFalse(event.path("changedAt").asString().isBlank());
-            destination.forEach((field, value) -> assertEquals(value.strip(), event.path("assignment").path(field).asString()));
-            var technicianDetail = send(request("/api/incidents/" + id).header("Authorization", "Bearer " + technicianToken).GET());
-            assertEquals(destination.containsKey("technicianId") ? 200 : 404, technicianDetail.statusCode());
+        for (String member : List.of(first, second)) {
+            assertEquals(200, getAs("/api/incidents/" + teamIncident, member).statusCode());
+            assertVisible("/api/incidents?size=100", member, teamIncident, true);
+            assertVisible("/api/incidents/public", member, teamIncident, true);
+            assertVisible("/api/incidents/map-members?west=-4.5&south=36.6&east=-4.3&north=36.8", member, teamIncident, true);
         }
+        assertEquals(404, getAs("/api/incidents/" + teamIncident, outside).statusCode());
+        assertVisible("/api/incidents?size=100", outside, teamIncident, false);
+        assertEquals(200, getAs("/api/incidents/" + individualIncident, first).statusCode());
+        assertEquals(404, getAs("/api/incidents/" + individualIncident, second).statusCode());
+
+        var after = assignmentCatalog(operatorToken);
+        assertEquals(workload(before, LIGHTING_TEAM) + 2, workload(after, LIGHTING_TEAM));
+        assertEquals(workload(before, FIRST_TECHNICIAN) + 2, workload(after, FIRST_TECHNICIAN));
+        assertEquals(workload(before, SECOND_TECHNICIAN) + 1, workload(after, SECOND_TECHNICIAN));
+        assertEquals(workload(before, OUTSIDE_TECHNICIAN), workload(after, OUTSIDE_TECHNICIAN));
+
+        var finished = incidents.findById(UUID.fromString(teamIncident)).orElseThrow();
+        finished.setStatus(com.leftjoiner.urbanpulse.urbanpulse.entity.enums.IncidentStatus.RESOLVED);
+        incidents.saveAndFlush(finished);
+        var filtered = assignmentCatalog(operatorToken);
+        assertEquals(workload(after, LIGHTING_TEAM) - 1, workload(filtered, LIGHTING_TEAM));
+        assertEquals(workload(after, SECOND_TECHNICIAN) - 1, workload(filtered, SECOND_TECHNICIAN));
+        assertEquals(200, getAs("/api/incidents/" + teamIncident, second).statusCode());
     }
 
     @Test
@@ -419,32 +444,76 @@ class JwtAuthenticationIntegrationTest {
         UserEntity citizen = user(UserRole.CITIZEN);
         String citizenToken = token(citizen);
         String operator = token(user(UserRole.OPERATOR));
-        UserEntity technician = user(UserRole.TECHNICIAN);
-        technician.setActive(false);
-        users.saveAndFlush(technician);
+        UserEntity unavailable = user(UserRole.TECHNICIAN);
+        unavailable.setActive(false);
+        unavailable.setTeam(users.findById(UUID.fromString(FIRST_TECHNICIAN)).orElseThrow().getTeam());
+        users.saveAndFlush(unavailable);
 
         String id = reportForAssignment(citizenToken);
-        String path = "/api/operator/assignments/" + id;
-        String department = "{\"department\":\"Limpieza\"}";
-        assertEquals(403, post(path, citizenToken, department).statusCode());
+        String path = ASSIGNMENTS + id;
+        String destination = json.writeValueAsString(Map.of("departmentId", URBAN_SERVICES, "teamId", LIGHTING_TEAM));
+        assertEquals(403, getAs(ASSIGNMENTS + "catalog", citizenToken).statusCode());
+        assertEquals(403, post(path, citizenToken, destination).statusCode());
         assertUnauthenticated(send(request(path).header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(department))));
-        assertEquals(409, post(path, operator, department).statusCode());
-        assertEquals(404, post("/api/operator/assignments/" + UUID.randomUUID(), operator, department).statusCode());
+                .POST(HttpRequest.BodyPublishers.ofString(destination))));
+        assertEquals(409, post(path, operator, destination).statusCode());
+        assertEquals(404, post(ASSIGNMENTS + UUID.randomUUID(), operator, destination).statusCode());
         assertEquals(200, post("/api/operator/reviews/" + id + "/validate", operator, null).statusCode());
+
         for (Map<String, String> invalid : List.of(
-                Map.of("team", "  "), Map.of("department", "Limpieza", "team", "A"),
-                Map.of("technicianId", citizen.getId().toString()),
-                Map.of("technicianId", technician.getId().toString()),
-                Map.of("technicianId", UUID.randomUUID().toString()))) {
+                Map.of("departmentId", URBAN_SERVICES),
+                Map.of("departmentId", MOBILITY, "teamId", LIGHTING_TEAM),
+                Map.of("departmentId", MOBILITY, "technicianId", FIRST_TECHNICIAN),
+                Map.of("departmentId", URBAN_SERVICES, "teamId", LIGHTING_TEAM, "technicianId", FIRST_TECHNICIAN),
+                Map.of("departmentId", URBAN_SERVICES, "technicianId", citizen.getId().toString()),
+                Map.of("departmentId", URBAN_SERVICES, "technicianId", unavailable.getId().toString()))) {
             var response = post(path, operator, json.writeValueAsString(invalid));
             assertEquals(400, response.statusCode());
             assertEquals("INVALID_ASSIGNMENT_DESTINATION", json.readTree(response.body()).path("code").asString());
         }
-        var detail = send(request("/api/incidents/" + id).header("Authorization", "Bearer " + operator).GET());
+        var detail = getAs("/api/incidents/" + id, operator);
+        assertEquals(200, detail.statusCode());
         var incident = json.readTree(detail.body());
         assertEquals("VALIDATED", incident.path("status").asString());
         assertEquals(1, incident.path("history").size());
+    }
+
+    private String technicianToken(String id) {
+        return jwtService.issue(UUID.fromString(id), UserRole.TECHNICIAN);
+    }
+
+    private void assignValidated(String id, String operator, Map<String, String> destination) throws Exception {
+        assertEquals(200, post("/api/operator/reviews/" + id + "/validate", operator, null).statusCode());
+        String body = json.writeValueAsString(destination);
+        assertEquals(204, post(ASSIGNMENTS + id, operator, body).statusCode());
+        assertEquals(409, post(ASSIGNMENTS + id, operator, body).statusCode());
+    }
+
+    private void assertVisible(String path, String technician, String incidentId, boolean visible) throws Exception {
+        var response = getAs(path, technician);
+        assertEquals(200, response.statusCode());
+        assertEquals(visible, response.body().contains(incidentId));
+    }
+
+    private tools.jackson.databind.JsonNode assignmentCatalog(String operator) throws Exception {
+        var response = getAs(ASSIGNMENTS + "catalog", operator);
+        assertEquals(200, response.statusCode());
+        return json.readTree(response.body());
+    }
+
+    private static tools.jackson.databind.JsonNode option(tools.jackson.databind.JsonNode options, String id) {
+        for (var option : options) {
+            if (id.equals(option.path("id").asString())) return option;
+        }
+        return options.path(id);
+    }
+
+    private static long workload(tools.jackson.databind.JsonNode catalog, String id) {
+        return option(catalog, id).path("assignedCount").asLong();
+    }
+
+    private HttpResponse<String> getAs(String path, String token) throws Exception {
+        return send(request(path).header("Authorization", "Bearer " + token).GET());
     }
 
     private String reportForAssignment(String token) throws Exception {

@@ -6,7 +6,14 @@ import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
-public class TechnicianOptionResponse {
+public class AssignmentCatalogOption {
+    private final Kind kind;
     private final UUID id;
+    private final UUID departmentId;
     private final String name;
+    private final long assignedCount;
+
+    public enum Kind {
+        DEPARTMENT, TEAM, TECHNICIAN
+    }
 }

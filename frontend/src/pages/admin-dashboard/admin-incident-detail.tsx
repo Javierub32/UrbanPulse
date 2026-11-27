@@ -14,10 +14,10 @@ import { categories } from '@/pages/report/services/report-service';
 import type { IncidentDetail } from '@/types/incidents';
 
 import { ADMIN_COMPACT_SIDEBAR_INSET } from './admin-shell';
-import { GlassFilterMenu } from './glass-filter-menu';
+import { GlassFilterMenu, type GlassFilterOption } from './glass-filter-menu';
 import { incidentStatus, incidentStatusTone } from './incident-status';
 import { Reveal, Skeleton } from './motion';
-import { getAssignmentTechnicians, type AssignmentDestination, type ReviewCommand } from './review-service';
+import { getAssignmentCatalog, type AssignmentCatalogOption, type AssignmentDestination, type ReviewCommand } from './review-service';
 import { StatusPill } from './status-pill';
 import { useAdminTheme } from './theme';
 import { useIncidentReview } from './use-incident-review';
@@ -394,12 +394,6 @@ function AdminIncidentDetail({ id, fromMap }: { id?: string; fromMap: boolean })
   );
 }
 
-const assignmentOptions = [
-  { value: 'department', label: 'Departamento' },
-  { value: 'team', label: 'Equipo' },
-  { value: 'technicianId', label: 'Técnico' },
-] as const;
-
 function AssignmentForm({ locked, busy, error, clearFeedback, onAssign }: {
   locked: boolean;
   busy: boolean;
@@ -408,100 +402,99 @@ function AssignmentForm({ locked, busy, error, clearFeedback, onAssign }: {
   onAssign: (destination: AssignmentDestination) => void;
 }) {
   const theme = useAdminTheme();
-  const [target, setTarget] = useState('');
-  const [name, setName] = useState('');
-  const [technician, setTechnician] = useState('');
-  const [menu, setMenu] = useState<'target' | 'technician' | null>(null);
+  const [departmentId, setDepartmentId] = useState('');
+  const [recipientId, setRecipientId] = useState('');
+  const [menu, setMenu] = useState<'department' | 'recipient' | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const [technicians, setTechnicians] = useState<{ attempt: number; options: { value: string; label: string }[]; error?: string }>();
-  const label = assignmentOptions.find((option) => option.value === target)?.label;
+  const [result, setResult] = useState<{ attempt: number; options: AssignmentCatalogOption[]; error?: string }>();
 
   useEffect(() => {
-    if (target !== 'technicianId') return;
     const controller = new AbortController();
-    getAssignmentTechnicians(controller.signal).then((users) => {
-      if (!controller.signal.aborted) {
-        setTechnicians({ attempt, options: users.map(({ id, name }) => ({ value: id, label: name?.trim() || id })) });
-      }
+    getAssignmentCatalog(controller.signal).then((options) => {
+      if (!controller.signal.aborted) setResult({ attempt, options });
     }).catch((cause: unknown) => {
       if (!controller.signal.aborted) {
-        setTechnicians({ attempt, options: [], error: cause instanceof Error ? cause.message : 'No se pudieron cargar los técnicos.' });
+        const error = cause instanceof Error ? cause.message : 'No se pudo cargar el catálogo de asignaciones.';
+        setResult({ attempt, options: [], error });
       }
     });
     return () => controller.abort();
-  }, [target, attempt]);
+  }, [attempt]);
 
-  const options = technicians?.attempt === attempt ? technicians.options : undefined;
-  const loadError = technicians?.attempt === attempt ? technicians.error : undefined;
-  function destination(): AssignmentDestination | undefined {
-    if (target === 'technicianId' && options?.some(({ value }) => value === technician)) return { technicianId: technician };
-    if (target === 'department' && name.trim()) return { department: name.trim() };
-    if (target === 'team' && name.trim()) return { team: name.trim() };
+  if (result?.attempt !== attempt) {
+    return <ActivityIndicator accessibilityLabel="Cargando destinos de asignación" color={theme.accent} />;
   }
-  const selected = destination();
+  if (result.error) {
+    return (
+      <View style={styles.editor}>
+        <InlineError message={result.error} />
+        <ActionButton label="Reintentar" onPress={() => setAttempt((current) => current + 1)} />
+      </View>
+    );
+  }
+
+  const departments = result.options
+    .filter((option) => option.kind === 'DEPARTMENT')
+    .map(({ id, name }) => ({ value: id, label: name ?? id }));
+  const recipients = result.options.filter((option) => option.departmentId === departmentId);
+  const recipientOptions: GlassFilterOption[] = recipients.map(({ id, name, kind, assignedCount }) => ({
+    value: id,
+    label: (kind === 'TEAM' ? 'Equipo · ' : 'Técnico · ') + (name?.trim() || id),
+    badge: {
+      text: String(assignedCount),
+      accessibilityLabel: assignedCount === 1 ? '1 incidencia activa' : assignedCount + ' incidencias activas',
+    },
+  }));
+  const recipient = recipients.find(({ id }) => id === recipientId);
+
+  function assign() {
+    if (recipient?.kind === 'TEAM') onAssign({ departmentId, teamId: recipient.id });
+    if (recipient?.kind === 'TECHNICIAN') onAssign({ departmentId, technicianId: recipient.id });
+  }
+
+  if (!departments.length) {
+    return <Text style={[styles.secondary, { color: theme.muted }]}>No hay departamentos disponibles.</Text>;
+  }
 
   return (
     <View style={styles.editor}>
       <GlassFilterMenu
-        id="assignment-destination"
-        label="Tipo de destino"
-        value={target}
-        options={assignmentOptions}
-        emptyLabel="Selecciona un destino"
-        field={{ open: menu === 'target', onOpenChange: (open) => setMenu(open ? 'target' : null) }}
+        id="assignment-department"
+        label="Departamento"
+        value={departmentId}
+        options={departments}
+        emptyLabel="Selecciona un departamento"
+        field={{ open: menu === 'department', onOpenChange: (open) => setMenu(open ? 'department' : null), inline: true }}
         disabled={locked}
         onChange={(value) => {
-          if (value === target) return;
+          if (value === departmentId) return;
           clearFeedback();
-          setTarget(value);
-          setName('');
-          setTechnician('');
-          if (value === 'technicianId') setAttempt((current) => current + 1);
+          setDepartmentId(value);
+          setRecipientId('');
         }}
       />
-      {target === 'technicianId' && (
-        loadError ? (
-          <>
-            <InlineError message={loadError} />
-            <ActionButton label="Reintentar" disabled={locked} onPress={() => setAttempt((current) => current + 1)} />
-          </>
-        ) : !options ? <ActivityIndicator accessibilityLabel="Cargando técnicos" color={theme.accent} />
-          : options.length === 0 ? (
-            <Text style={[styles.secondary, { color: theme.muted }]}>No hay técnicos activos disponibles.</Text>
-          ) : (
-            <GlassFilterMenu
-              id="assignment-technician"
-              label="Técnico"
-              value={technician}
-              options={options}
-              emptyLabel="Selecciona un técnico"
-              field={{ open: menu === 'technician', onOpenChange: (open) => setMenu(open ? 'technician' : null) }}
-              disabled={locked}
-              onChange={(value) => { clearFeedback(); setTechnician(value); }}
-            />
-          )
-      )}
-      {(target === 'department' || target === 'team') && (
-        <View style={styles.editorLabel}>
-          <Text style={[styles.secondary, { color: theme.muted }]}>{label}</Text>
-          <TextInput
-            accessibilityLabel={label}
-            editable={!locked}
-            maxLength={255}
-            value={name}
-            onChangeText={(value) => { clearFeedback(); setName(value); }}
-            style={[styles.input, { color: theme.text, backgroundColor: theme.track, borderColor: theme.border }]}
-          />
-        </View>
-      )}
+      {!!departmentId && (recipientOptions.length ? (
+        <GlassFilterMenu
+          id="assignment-recipient"
+          label="Equipo o técnico"
+          value={recipientId}
+          options={recipientOptions}
+          emptyLabel="Selecciona un equipo o técnico"
+          field={{ open: menu === 'recipient', onOpenChange: (open) => setMenu(open ? 'recipient' : null), inline: true }}
+          disabled={locked}
+          onChange={(value) => { clearFeedback(); setRecipientId(value); }}
+        />
+      ) : (
+        <Text style={[styles.secondary, { color: theme.muted }]}>Este departamento no tiene equipos ni técnicos disponibles.</Text>
+      ))}
       <InlineError message={error} />
       <ActionButton
         id="admin-assign-incident"
         label="Asignar incidencia"
         tone="primary"
-        disabled={locked || !selected}
+        disabled={locked || !recipient}
         busy={busy}
-        onPress={() => { if (selected) onAssign(selected); }}
+        onPress={assign}
       />
     </View>
   );

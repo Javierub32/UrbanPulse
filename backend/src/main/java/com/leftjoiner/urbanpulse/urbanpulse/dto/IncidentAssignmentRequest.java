@@ -1,6 +1,6 @@
 package com.leftjoiner.urbanpulse.urbanpulse.dto;
 
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
@@ -8,9 +8,8 @@ import lombok.Setter;
 @Getter
 @Setter
 public class IncidentAssignmentRequest {
-    @Size(max = 255)
-    private String department;
-    @Size(max = 255)
-    private String team;
+    @NotNull(message = "Selecciona un departamento.")
+    private UUID departmentId;
+    private UUID teamId;
     private UUID technicianId;
 }

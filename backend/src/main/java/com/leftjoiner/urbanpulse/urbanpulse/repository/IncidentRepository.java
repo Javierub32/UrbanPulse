@@ -23,17 +23,21 @@ public interface IncidentRepository extends JpaRepository<IncidentEntity, UUID> 
 
     List<IncidentEntity> findAllByUserIdOrderByRegisteredAtDescIdDesc(UUID userId);
 
-    @org.springframework.data.jpa.repository.Query("""
-        select i from IncidentEntity i where exists
-        (select a.id from AssignmentEntity a where a.incident = i and a.technician.id = :userId)
-        order by i.registeredAt desc, i.id desc
-        """)
+    @org.springframework.data.jpa.repository.Query(value = """
+        SELECT i.* FROM "Incident" i WHERE EXISTS (
+            SELECT 1 FROM "IncidentTechnicianAccess" a
+            WHERE a."incidentId" = i."id" AND a."technicianId" = :userId
+        )
+        ORDER BY i."registeredAt" DESC, i."id" DESC
+        """, nativeQuery = true)
     List<IncidentEntity> findAssignedTo(@org.springframework.data.repository.query.Param("userId") UUID userId);
 
-    @org.springframework.data.jpa.repository.Query("""
-        select i from IncidentEntity i where i.id = :incidentId and exists
-        (select a.id from AssignmentEntity a where a.incident = i and a.technician.id = :userId)
-        """)
+    @org.springframework.data.jpa.repository.Query(value = """
+        SELECT i.* FROM "Incident" i WHERE i."id" = :incidentId AND EXISTS (
+            SELECT 1 FROM "IncidentTechnicianAccess" a
+            WHERE a."incidentId" = i."id" AND a."technicianId" = :userId
+        )
+        """, nativeQuery = true)
     Optional<IncidentEntity> findAssignedById(@org.springframework.data.repository.query.Param("incidentId") UUID incidentId,
                                               @org.springframework.data.repository.query.Param("userId") UUID userId);
 }

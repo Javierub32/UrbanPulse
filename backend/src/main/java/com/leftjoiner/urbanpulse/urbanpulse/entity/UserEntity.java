@@ -24,6 +24,10 @@ public class UserEntity {
     @Column(name = "\"id\"", nullable = false, updatable = false)
     private UUID id;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "\"teamId\"")
+    private TeamEntity team;
+
     @Column(name = "\"name\"")
     private String name;
 

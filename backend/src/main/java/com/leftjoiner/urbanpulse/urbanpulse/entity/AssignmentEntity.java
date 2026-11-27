@@ -32,6 +32,10 @@ public class AssignmentEntity {
     @JoinColumn(name = "\"technicianId\"", referencedColumnName = "\"id\"")
     private UserEntity technician;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "\"teamId\"")
+    private TeamEntity assignedTeam;
+
     @Column(name = "\"department\"")
     private String department;
 
