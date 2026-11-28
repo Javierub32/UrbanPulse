@@ -52,9 +52,11 @@ docker compose --profile container up --build -d
 El perfil `container` incluye la API. Si ejecutas `docker compose up -d` sin ese perfil, se inician PostGIS y MinIO.
 Compose compila MinIO desde una versión fijada del código fuente la primera vez. El volumen `urbanpulse-media` conserva los adjuntos entre reinicios.
 
-La primera vez se descargan las imágenes y las dependencias del backend. Cuando PostGIS está listo, arranca la API y Flyway aplica las migraciones de `backend/src/main/resources/db/migration`. Estas crean el esquema y cargan activos urbanos, incidencias y diez usuarios sintéticos de demostración (dos por cada rol). No hay que ejecutar los SQL a mano.
+La primera vez se descargan las imágenes y las dependencias del backend. Cuando PostGIS está listo, arranca la API y Flyway aplica las migraciones de `backend/src/main/resources/db/migration`. Estas crean el esquema y cargan activos urbanos, incidencias y usuarios sintéticos de demostración. No hay que ejecutar los SQL a mano.
 
 Las cuentas sintéticas usan la contraseña `urbanpulse`. Sus correos son `ciudadano1@urbanpulse.invalid` y `ciudadano2@urbanpulse.invalid`, y siguen el mismo patrón para `operador`, `tecnico`, `administrador` y `analista`. Son credenciales públicas para pruebas: no deben usarse en producción.
+
+Para probar asignaciones por equipo, inicia sesión como operador y asigna una incidencia validada a **Servicios urbanos → Alumbrado**. Los usuarios `tecnico1@urbanpulse.invalid` y `tecnico2@urbanpulse.invalid` podrán consultarla. También están disponibles `tecnico3@urbanpulse.invalid` en Limpieza viaria y `tecnico4@urbanpulse.invalid` en Señalización (Movilidad), con la misma contraseña de demostración.
 
 Puedes ver el estado de los contenedores y seguir el arranque con:
 

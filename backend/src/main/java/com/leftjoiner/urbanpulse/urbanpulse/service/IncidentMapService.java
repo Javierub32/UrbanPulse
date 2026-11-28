@@ -43,7 +43,7 @@ public class IncidentMapService {
               FROM "Incident"
               WHERE "location" && ST_MakeEnvelope(:west, :south, :east, :north, 4326)
                 AND (:accessRole = 'OPERATOR' OR (:accessRole = 'CITIZEN' AND "userId" = :viewerId)
-                  OR (:accessRole = 'TECHNICIAN' AND EXISTS (SELECT 1 FROM "Assignment" a
+                  OR (:accessRole = 'TECHNICIAN' AND EXISTS (SELECT 1 FROM "IncidentTechnicianAccess" a
                     WHERE a."incidentId" = "Incident"."id" AND a."technicianId" = :viewerId)))
                 AND ST_Intersects("location", ST_MakeEnvelope(:west, :south, :east, :north, 4326))
                 AND (CAST(:category AS text) IS NULL OR "category"::text = :category)
@@ -119,7 +119,7 @@ public class IncidentMapService {
             FROM "Incident"
             WHERE "location" && ST_MakeEnvelope(:west - 0.00000001, :south - 0.00000001, :east + 0.00000001, :north + 0.00000001, 4326)
               AND (:accessRole = 'OPERATOR' OR (:accessRole = 'CITIZEN' AND "userId" = :viewerId)
-                OR (:accessRole = 'TECHNICIAN' AND EXISTS (SELECT 1 FROM "Assignment" a
+                OR (:accessRole = 'TECHNICIAN' AND EXISTS (SELECT 1 FROM "IncidentTechnicianAccess" a
                   WHERE a."incidentId" = "Incident"."id" AND a."technicianId" = :viewerId)))
               AND ST_X("location") BETWEEN :west AND :east AND ST_Y("location") BETWEEN :south AND :north
               AND (CAST(:category AS text) IS NULL OR "category"::text = :category)

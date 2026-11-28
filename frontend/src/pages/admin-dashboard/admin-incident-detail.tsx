@@ -1,7 +1,7 @@
 import type { ImageSource } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Armchair, ArrowDown, ArrowLeft, Brush, CircleAlert, Flag, Lightbulb, MapPin, Minus, Route, Shapes, TrafficCone, Trash2, Trees, TriangleAlert, UserRound } from 'lucide-react-native';
-import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import Animated, { Easing, interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 
@@ -17,10 +17,10 @@ import { categories } from '@/pages/report/services/report-service';
 import type { IncidentDetail } from '@/types/incidents';
 
 import { ADMIN_COMPACT_SIDEBAR_INSET } from './admin-shell';
-import { GlassFilterMenu } from './glass-filter-menu';
+import { GlassFilterMenu, type GlassFilterOption } from './glass-filter-menu';
 import { incidentStatus, incidentStatusTone } from './incident-status';
 import { Reveal, Skeleton } from './motion';
-import type { ReviewCommand } from './review-service';
+import { getAssignmentCatalog, type AssignmentCatalogOption, type AssignmentDestination, type ReviewCommand } from './review-service';
 import { StatusPill } from './status-pill';
 import { useAdminTheme } from './theme';
 import { useIncidentReview } from './use-incident-review';
@@ -207,6 +207,7 @@ function AdminIncidentDetail({ id, fromMap }: { id?: string; fromMap: boolean })
   const selectedPriority = priorityOptions.find((item) => item.value === priority);
   const hasLocationEditor = fieldEditor?.field === 'location';
 
+  const assignment = incident.history.findLast((entry) => entry.assignment)?.assignment;
   const ticketAndAssignments = (
     <View style={[styles.moduleGroup, ticketAside && styles.across]}>
       <View style={[styles.ticketColumn, ticketAside && styles.ticketColumnAside]}>
@@ -214,7 +215,25 @@ function AdminIncidentDetail({ id, fromMap }: { id?: string; fromMap: boolean })
       </View>
       <Reveal from="bottom" index={3} distance={66} duration={MODULE_ENTER_DURATION} style={ticketAside && styles.grow}>
         <DetailCard id="admin-card-assignments" title="Asignaciones" icon={<UserRound size={17} color={theme.muted} aria-hidden />}>
-          <Text style={[styles.secondary, { color: theme.muted }]}>Las asignaciones aún no están disponibles.</Text>
+          {review.assignable ? (
+            <AssignmentForm
+              locked={locked}
+              busy={busy === 'assign'}
+              error={actionError}
+              clearFeedback={review.clearFeedback}
+              onAssign={(body) => void submit({ action: 'assign', body })}
+            />
+          ) : assignment ? (
+            <>
+              {assignment.department && <ValueField label="Departamento" value={assignment.department} />}
+              {assignment.team && <ValueField label="Equipo" value={assignment.team} />}
+              {assignment.technicianId && (
+                <ValueField label="Técnico" value={assignment.technicianName || assignment.technicianId} />
+              )}
+            </>
+          ) : (
+            <Text style={[styles.secondary, { color: theme.muted }]}>Sin asignaciones registradas.</Text>
+          )}
         </DetailCard>
       </Reveal>
     </View>
@@ -362,7 +381,7 @@ function AdminIncidentDetail({ id, fromMap }: { id?: string; fromMap: boolean })
                     </View>
                   </View>
                 )}
-                {!editor && <InlineError message={actionError} />}
+                {!editor && !review.assignable && <InlineError message={actionError} />}
                 {notice && <Text accessibilityLiveRegion="polite" style={[styles.secondary, { color: notice.conflict ? theme.warning : theme.success }]}>{notice.text}</Text>}
                 {loading && <ActivityIndicator accessibilityLabel="Actualizando incidencia" color={theme.accent} />}
               </View>
@@ -381,6 +400,112 @@ function AdminIncidentDetail({ id, fromMap }: { id?: string; fromMap: boolean })
           incidentId={incident.id} token={session.accessToken} state={attachments.gallery} retry={attachments.retry} />
       </DetailCard>}
     </DetailScroll>
+  );
+}
+
+function AssignmentForm({ locked, busy, error, clearFeedback, onAssign }: {
+  locked: boolean;
+  busy: boolean;
+  error: string;
+  clearFeedback: () => void;
+  onAssign: (destination: AssignmentDestination) => void;
+}) {
+  const theme = useAdminTheme();
+  const [departmentId, setDepartmentId] = useState('');
+  const [recipientId, setRecipientId] = useState('');
+  const [menu, setMenu] = useState<'department' | 'recipient' | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<{ attempt: number; options: AssignmentCatalogOption[]; error?: string }>();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getAssignmentCatalog(controller.signal).then((options) => {
+      if (!controller.signal.aborted) setResult({ attempt, options });
+    }).catch((cause: unknown) => {
+      if (!controller.signal.aborted) {
+        const error = cause instanceof Error ? cause.message : 'No se pudo cargar el catálogo de asignaciones.';
+        setResult({ attempt, options: [], error });
+      }
+    });
+    return () => controller.abort();
+  }, [attempt]);
+
+  if (result?.attempt !== attempt) {
+    return <ActivityIndicator accessibilityLabel="Cargando destinos de asignación" color={theme.accent} />;
+  }
+  if (result.error) {
+    return (
+      <View style={styles.editor}>
+        <InlineError message={result.error} />
+        <ActionButton label="Reintentar" onPress={() => setAttempt((current) => current + 1)} />
+      </View>
+    );
+  }
+
+  const departments = result.options
+    .filter((option) => option.kind === 'DEPARTMENT')
+    .map(({ id, name }) => ({ value: id, label: name ?? id }));
+  const recipients = result.options.filter((option) => option.departmentId === departmentId);
+  const recipientOptions: GlassFilterOption[] = recipients.map(({ id, name, kind, assignedCount }) => ({
+    value: id,
+    label: (kind === 'TEAM' ? 'Equipo · ' : 'Técnico · ') + (name?.trim() || id),
+    badge: {
+      text: String(assignedCount),
+      accessibilityLabel: assignedCount === 1 ? '1 incidencia activa' : assignedCount + ' incidencias activas',
+    },
+  }));
+  const recipient = recipients.find(({ id }) => id === recipientId);
+
+  function assign() {
+    if (recipient?.kind === 'TEAM') onAssign({ departmentId, teamId: recipient.id });
+    if (recipient?.kind === 'TECHNICIAN') onAssign({ departmentId, technicianId: recipient.id });
+  }
+
+  if (!departments.length) {
+    return <Text style={[styles.secondary, { color: theme.muted }]}>No hay departamentos disponibles.</Text>;
+  }
+
+  return (
+    <View style={styles.editor}>
+      <GlassFilterMenu
+        id="assignment-department"
+        label="Departamento"
+        value={departmentId}
+        options={departments}
+        emptyLabel="Selecciona un departamento"
+        field={{ open: menu === 'department', onOpenChange: (open) => setMenu(open ? 'department' : null), inline: true }}
+        disabled={locked}
+        onChange={(value) => {
+          if (value === departmentId) return;
+          clearFeedback();
+          setDepartmentId(value);
+          setRecipientId('');
+        }}
+      />
+      {!!departmentId && (recipientOptions.length ? (
+        <GlassFilterMenu
+          id="assignment-recipient"
+          label="Equipo o técnico"
+          value={recipientId}
+          options={recipientOptions}
+          emptyLabel="Selecciona un equipo o técnico"
+          field={{ open: menu === 'recipient', onOpenChange: (open) => setMenu(open ? 'recipient' : null), inline: true }}
+          disabled={locked}
+          onChange={(value) => { clearFeedback(); setRecipientId(value); }}
+        />
+      ) : (
+        <Text style={[styles.secondary, { color: theme.muted }]}>Este departamento no tiene equipos ni técnicos disponibles.</Text>
+      ))}
+      <InlineError message={error} />
+      <ActionButton
+        id="admin-assign-incident"
+        label="Asignar incidencia"
+        tone="primary"
+        disabled={locked || !recipient}
+        busy={busy}
+        onPress={assign}
+      />
+    </View>
   );
 }
 

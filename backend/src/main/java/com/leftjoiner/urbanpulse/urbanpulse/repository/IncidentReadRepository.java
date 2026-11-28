@@ -156,7 +156,7 @@ public class IncidentReadRepository {
             case OPERATOR -> "TRUE";
             case CITIZEN -> "i.\"userId\" = :viewerId";
             case TECHNICIAN -> """
-                EXISTS (SELECT 1 FROM "Assignment" a
+                EXISTS (SELECT 1 FROM "IncidentTechnicianAccess" a
                         WHERE a."incidentId" = i."id" AND a."technicianId" = :viewerId)
                 """;
             default -> throw new AccessDeniedException("Acceso denegado");

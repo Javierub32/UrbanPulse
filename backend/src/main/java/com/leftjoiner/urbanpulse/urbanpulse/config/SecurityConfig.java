@@ -58,6 +58,8 @@ public class SecurityConfig {
                         .requestMatchers(new RegexRequestMatcher("^/api/incidents/[0-9a-fA-F-]{36}(?:\\?.*)?$", "GET"))
                                 .hasAnyRole("CITIZEN", "OPERATOR", "TECHNICIAN")
                         .requestMatchers("/api/operator/reviews/**", "/api/operator/reviews").hasRole("OPERATOR")
+                        .requestMatchers(HttpMethod.GET, "/api/operator/assignments/catalog").hasRole("OPERATOR")
+                        .requestMatchers(HttpMethod.POST, "/api/operator/assignments/*").hasRole("OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/incidents/create").hasRole("CITIZEN")
                         .requestMatchers(HttpMethod.POST, "/api/incidents/{incidentId}/attachments").hasRole("CITIZEN")
                         .requestMatchers(HttpMethod.GET, "/api/incidents/{incidentId}/attachments",
