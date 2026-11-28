@@ -28,6 +28,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfigureMetrics;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -41,6 +42,7 @@ import tools.jackson.databind.json.JsonMapper;
 import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers
+@AutoConfigureMetrics
 @ActiveProfiles("test")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "spring.docker.compose.enabled=false")
@@ -275,6 +277,16 @@ class JwtAuthenticationIntegrationTest {
         assertTrue(spec.path("paths").path("/api/incidents/create").path("post").path("responses").has("403"));
         assertUnauthenticated(send(request("/actuator/env").GET()));
         assertUnauthenticated(send(request("/api/staff/incidents").GET()));
+    }
+
+    @Test
+    void prometheusExposesHttpRequestHistogramWithoutAuthentication() throws Exception {
+        assertEquals(200, send(request("/actuator/health").GET()).statusCode());
+
+        var metrics = send(request("/actuator/prometheus").GET());
+
+        assertEquals(200, metrics.statusCode());
+        assertTrue(metrics.body().contains("http_server_requests_seconds_bucket{"));
     }
 
     @Test
