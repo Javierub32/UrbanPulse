@@ -1,18 +1,20 @@
 # Guía de despliegue
 
-Actualmente UrbanPulse incluye una configuración de Docker Compose para ejecutar la API y PostgreSQL con PostGIS. Esta guía describe ese entorno, que sirve para realizar pruebas y demostraciones.
+UrbanPulse incluye una configuración de Docker Compose para ejecutar la API, PostgreSQL con PostGIS y MinIO. Esta guía describe ese entorno, que sirve para realizar pruebas y demostraciones.
 
 El despliegue cloud y la distribución del frontend todavía están pendientes de definir.
 
 ## Preparar el entorno
 
-Necesitas Docker en ejecución, Docker Compose v2 y el repositorio clonado. Los puertos 8080 y 5432 deben estar disponibles.
+Necesitas Docker en ejecución, Docker Compose v2 y el repositorio clonado. Los puertos 8080, 5432 y 9000 deben estar disponibles. MinIO publica el puerto 9000 solo en la interfaz local.
 
 Desde la raíz del proyecto, crea un `.env` con la contraseña de la base de datos:
 
 ```dotenv
 POSTGRES_PASSWORD=tu-contraseña-del-entorno
 URBANPULSE_JWT_SECRET=tu-clave-base64
+MINIO_ROOT_USER=tu-usuario-de-almacenamiento
+MINIO_ROOT_PASSWORD=tu-contraseña-de-almacenamiento
 ```
 
 La clave JWT debe ser aleatoria y contener al menos 32 bytes antes de codificarse en Base64. Consulta [la guía de autenticación](autenticacion-jwt.md) para generarla; no guardes el fichero `.env` en el repositorio.
@@ -39,13 +41,13 @@ Desde la raíz:
 docker compose --profile container up --build -d
 ```
 
-El perfil `container` incluye la API. Sin ese perfil, Compose solo arranca la base de datos.
+El perfil `container` incluye la API. Sin ese perfil, Compose arranca PostGIS y MinIO.
 
-El [`Dockerfile` del backend](../backend/Dockerfile) compila la aplicación con Maven y Java 17. Después copia el JAR a una imagen con el entorno de ejecución de Java.
+El [`Dockerfile` del backend](../backend/Dockerfile) tiene etapas independientes para la API y MinIO. La API se compila con Maven y Java 17. MinIO se compila desde una versión fijada del código fuente.
 
 La construcción de la imagen omite los tests, por lo que deben haberse ejecutado antes.
 
-Compose espera a que la base de datos esté preparada antes de iniciar la API. Durante el arranque, Flyway aplica las migraciones pendientes.
+Compose espera a que PostGIS y MinIO estén preparados antes de iniciar la API. Durante el arranque, Flyway aplica las migraciones pendientes.
 
 ## Comprobar el resultado
 
@@ -63,6 +65,8 @@ curl -i http://localhost:8080/actuator/health
 
 La respuesta debe tener estado HTTP 200 y mostrar `"status":"UP"`.
 
+Comprueba que MinIO responde con HTTP 200 en `http://127.0.0.1:9000/minio/health/ready`.
+
 Para revisar los logs:
 
 ```bash
@@ -73,7 +77,7 @@ Comprueba también que puedes consultar las incidencias desde la app y que la AP
 
 ## Datos y configuración
 
-La base utiliza el volumen `urbanpulse-db` para conservar los datos entre arranques. Detener los contenedores no borra ese volumen.
+PostGIS usa el volumen `urbanpulse-db` y MinIO usa `urbanpulse-media`. La primera subida crea el bucket privado si todavía no existe. PostgreSQL conserva los metadatos y la clave relativa de cada objeto.
 
 Las migraciones actuales cargan datos sintéticos de demostración, incluidos diez usuarios activos con una contraseña pública. Antes de utilizar este procedimiento con datos reales habrá que revisar esa carga inicial y eliminar o desactivar esas cuentas.
 
@@ -95,7 +99,7 @@ Para detener los servicios:
 docker compose --profile container down
 ```
 
-No añadas `-v` si quieres conservar la base de datos.
+No añadas `-v` si quieres conservar la base de datos y los adjuntos.
 
 ## Recuperación ante fallos
 

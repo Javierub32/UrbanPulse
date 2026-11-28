@@ -8,7 +8,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { categories } from '@/pages/report/services/report-service';
 import { ApiError } from '@/services/api-client';
 import type { IncidentDetail } from '@/types/incidents';
-import { IncidentImage } from './components/incident-image';
+import { IncidentAttachments, useIncidentAttachments } from './components/incident-attachments';
 import { getIncidentDetail } from './services/incident-detail-service';
 import { useAuth } from '@/context/AuthContext';
 import { ReviewActions } from './components/review-actions';
@@ -37,6 +37,7 @@ function IncidentDetailContent({ id }: { id: string }) {
   const { session } = useAuth();
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<State>({ status: 'loading' });
+  const attachments = useIncidentAttachments(state.status === 'success' ? id : undefined, session?.accessToken, false);
   const retry = useCallback(() => setAttempt(value => value + 1), []);
 
   useEffect(() => {
@@ -68,7 +69,6 @@ function IncidentDetailContent({ id }: { id: string }) {
     {state.status === 'loading' && <View accessibilityRole="progressbar" accessibilityLabel="Cargando incidencia"><ActivityIndicator /><ThemedText>Cargando incidencia…</ThemedText></View>}
     {state.status === 'error' && <View style={{ gap: Spacing.two }}><ThemedText selectable accessibilityRole="alert">{state.message}</ThemedText>{state.retry && <Pressable accessibilityRole="button" onPress={retry} style={{ minHeight: 44, justifyContent: 'center' }}><ThemedText type="linkPrimary">Reintentar</ThemedText></Pressable>}</View>}
     {state.status === 'success' && <View style={{ width: '100%', maxWidth: 680, alignSelf: 'center', gap: Spacing.four }}>
-      <IncidentImage />
       {session?.user.role === 'OPERATOR' && state.data.status === 'REPORTED' && <ReviewActions incident={state.data} onDone={retry} />}
       <View style={{ gap: Spacing.two }}>
         <View style={{ alignSelf: 'flex-start', backgroundColor: theme.backgroundElement, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: Spacing.one }}><ThemedText type="smallBold" style={{ color: theme.accent }}>{label(state.data.status, statuses)}</ThemedText></View>
@@ -103,6 +103,8 @@ function IncidentDetailContent({ id }: { id: string }) {
       <View style={{ gap: Spacing.three }}><ThemedText type="smallBold">Historial</ThemedText>
         {state.data.history.length === 0 ? <ThemedText themeColor="textSecondary">No hay actividad registrada.</ThemedText> : state.data.history.map((entry, index) => <View key={`${entry.changedAt}-${index}`} style={{ flexDirection: 'row', gap: Spacing.three }}><View style={{ width: 10, height: 10, borderRadius: 5, marginTop: 7, backgroundColor: theme.accent }} /><View style={{ flex: 1, gap: Spacing.one }}><ThemedText>{entry.action === 'INCIDENT_EDITED' ? 'Información de la incidencia editada' : entry.action === 'INFORMATION_REQUESTED' ? 'Información adicional solicitada' : `${entry.previousStatus ? `${label(entry.previousStatus, statuses)} → ` : ''}${label(entry.status, statuses)}`}</ThemedText>{entry.reason && <ThemedText>{entry.action === 'INCIDENT_EDITED' ? `Campos modificados: ${entry.reason}` : entry.reason}</ThemedText>}{session?.user.role === 'OPERATOR' && (entry.actorName || entry.actorId) && <ThemedText type="small" themeColor="textSecondary">Realizado por: {entry.actorName || entry.actorId}</ThemedText>}<ThemedText type="small" themeColor="textSecondary">{date(entry.changedAt)}</ThemedText></View></View>)}
       </View>
+      {session?.accessToken && attachments.gallery && <IncidentAttachments key={`${id}:${session.accessToken}`}
+        incidentId={id} token={session.accessToken} state={attachments.gallery} retry={attachments.retry} />}
     </View>}
   </ScrollView>;
 }

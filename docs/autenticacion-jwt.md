@@ -93,7 +93,7 @@ La categoría obligatoria y la precisión de coordenadas de #11 no se cambian en
 
 ## Configurar el backend en desarrollo
 
-Requiere Java 17, Docker para PostGIS y una clave JWT propia. Generar una vez:
+Requiere Java 17, Docker para PostGIS y MinIO y una clave JWT propia. Generar una vez:
 
 ```bash
 openssl rand -base64 32
@@ -101,10 +101,10 @@ openssl rand -base64 32
 
 Guardar el resultado fuera de Git. Desde IntelliJ, añadir `URBANPULSE_JWT_SECRET` en **Run → Edit Configurations → Environment variables**, junto con `URBANPULSE_CORS_ALLOWED_ORIGINS=http://localhost:8081` para probar la web. No usar la clave del perfil de tests.
 
-Desde terminal, exportar esas variables antes de ejecutar Maven. Spring no carga automáticamente el `.env` de la raíz. Con la base de Compose:
+Desde terminal, exportar esas variables antes de ejecutar Maven. Spring no carga automáticamente el `.env` de la raíz. Con los servicios de Compose:
 
 ```bash
-docker compose up -d db
+docker compose up -d --build db minio
 cd backend
 bash ./mvnw spring-boot:run
 ```

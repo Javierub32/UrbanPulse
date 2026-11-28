@@ -1,3 +1,4 @@
+import type { ImageSource } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Armchair, ArrowDown, ArrowLeft, Brush, CircleAlert, Flag, Lightbulb, MapPin, Minus, Route, Shapes, TrafficCone, Trash2, Trees, TriangleAlert, UserRound } from 'lucide-react-native';
 import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
@@ -6,6 +7,8 @@ import Animated, { Easing, interpolate, useAnimatedStyle, useReducedMotion, useS
 
 import { GlassSurface } from '@/components/glass-surface';
 import { TicketPhoto } from '@/components/incident-ticket';
+import { useAuth } from '@/context/AuthContext';
+import { IncidentAttachments, useIncidentAttachments } from '@/pages/incident-detail/components/incident-attachments';
 import { reviewHistoryLabel } from '@/pages/incident-detail/review-history';
 import { TicketDetail } from '@/pages/incidents/components/ticket-stack';
 import { parseDate } from '@/pages/incidents/incident-filters';
@@ -81,10 +84,12 @@ export default function AdminIncidentDetailScreen() {
 
 function AdminIncidentDetail({ id, fromMap }: { id?: string; fromMap: boolean }) {
   const theme = useAdminTheme();
+  const { session } = useAuth();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const review = useIncidentReview(id);
   const { incident, busy, locked, loading, readError, notice, actionError } = review;
+  const attachments = useIncidentAttachments(incident?.id, session?.accessToken);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [openMenu, setOpenMenu] = useState<Exclude<EditField, 'location'> | null>(null);
   const fieldEditor = editor?.kind === 'fields' ? editor : null;
@@ -205,7 +210,7 @@ function AdminIncidentDetail({ id, fromMap }: { id?: string; fromMap: boolean })
   const ticketAndAssignments = (
     <View style={[styles.moduleGroup, ticketAside && styles.across]}>
       <View style={[styles.ticketColumn, ticketAside && styles.ticketColumnAside]}>
-        <PinnedTicket incident={incident} retry={review.refresh} />
+        <PinnedTicket incident={incident} retry={review.refresh} cover={attachments.cover} />
       </View>
       <Reveal from="bottom" index={3} distance={66} duration={MODULE_ENTER_DURATION} style={ticketAside && styles.grow}>
         <DetailCard id="admin-card-assignments" title="Asignaciones" icon={<UserRound size={17} color={theme.muted} aria-hidden />}>
@@ -232,7 +237,7 @@ function AdminIncidentDetail({ id, fromMap }: { id?: string; fromMap: boolean })
               <View style={[styles.moduleGroup, styles.fieldLayer, photoAside && styles.across]}>
                 <Reveal from="left" distance={88} duration={MODULE_ENTER_DURATION} style={photoAside && styles.imageAside}>
                   <GlassSurface nativeID="admin-card-evidence" style={[styles.imageFrame, { backgroundColor: theme.detailGlass, borderColor: theme.detailGlassBorder }]}>
-                    <TicketPhoto style={styles.imageContent} />
+                    <TicketPhoto key={attachments.cover?.uri ?? 'no-photo'} source={attachments.cover} style={styles.imageContent} />
                   </GlassSurface>
                 </Reveal>
 
@@ -371,6 +376,10 @@ function AdminIncidentDetail({ id, fromMap }: { id?: string; fromMap: boolean })
       </View>
 
       {!historyAside && ticketAndAssignments}
+      {session?.accessToken && attachments.gallery && <DetailCard id="admin-card-attachments" title="Archivos adjuntos">
+        <IncidentAttachments key={`${incident.id}:${session.accessToken}`}
+          incidentId={incident.id} token={session.accessToken} state={attachments.gallery} retry={attachments.retry} />
+      </DetailCard>}
     </DetailScroll>
   );
 }
@@ -486,7 +495,7 @@ function Timeline({ incident }: { incident: IncidentDetail }) {
   );
 }
 
-const PinnedTicket = memo(function PinnedTicket({ incident, retry }: { incident: IncidentDetail; retry: () => void }) {
+const PinnedTicket = memo(function PinnedTicket({ incident, retry, cover }: { incident: IncidentDetail; retry: () => void; cover?: ImageSource }) {
   const reduceMotion = useReducedMotion();
   const progress = useSharedValue(reduceMotion ? 3 : 0);
 
@@ -525,7 +534,7 @@ const PinnedTicket = memo(function PinnedTicket({ incident, retry }: { incident:
   return (
     <View style={styles.pinnedTicket}>
       <Animated.View style={ticketEntrance}>
-        <TicketDetail incident={incident} detail={{ state: { status: 'success', data: incident }, retry }} />
+        <TicketDetail incident={incident} detail={{ state: { status: 'success', data: incident }, retry }} cover={cover} />
       </Animated.View>
       <View pointerEvents="none" aria-hidden style={styles.pin}>
         <Animated.View style={[styles.pinShadow, shadowEntrance]} />
