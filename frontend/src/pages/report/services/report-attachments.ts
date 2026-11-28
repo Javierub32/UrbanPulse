@@ -1,3 +1,4 @@
+import { File as LocalFile } from 'expo-file-system';
 import type { ImagePickerAsset } from 'expo-image-picker';
 
 import { apiRequest } from '@/services/api-client';
@@ -67,7 +68,7 @@ export function prepareAttachments(assets: ImagePickerAsset[], existingCount: nu
   });
 }
 
-export function uploadAttachment(incidentId: string, attachment: ReportAttachment) {
+export async function uploadAttachment(incidentId: string, attachment: ReportAttachment) {
   if (!canUploadAttachments()) {
     throw new Error('Los archivos solo se pueden adjuntar desde la aplicación móvil.');
   }
@@ -75,10 +76,19 @@ export function uploadAttachment(incidentId: string, attachment: ReportAttachmen
   if (attachment.file) {
     body.append('file', attachment.file, attachment.name);
   } else {
+    let bytes: Uint8Array;
+    try {
+      bytes = await new LocalFile(attachment.uri).bytes();
+    } catch (error) {
+      throw new Error('No se ha podido leer el archivo seleccionado.', { cause: error });
+    }
+    if (!bytes.byteLength) throw new Error('El archivo está vacío.');
+    if (bytes.byteLength > MAX_ATTACHMENT_BYTES) throw new Error('Cada archivo puede ocupar como máximo 10 MiB.');
+    // Expo fetch encodes file parts through bytes(), with the original name and MIME type.
     body.append('file', {
-      uri: attachment.uri,
       name: attachment.name,
       type: attachment.mimeType,
+      bytes: () => bytes,
     } as unknown as Blob);
   }
   return apiRequest<IncidentAttachment>(
@@ -96,7 +106,12 @@ export async function uploadPendingAttachments(
 ) {
   for (const attachment of attachments) {
     if (uploaded.has(attachment.key)) continue;
-    await upload(incidentId, attachment);
+    try {
+      await upload(incidentId, attachment);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Vuelve a intentarlo.';
+      throw new Error(`No se pudo subir «${attachment.name}». ${detail}`, { cause: error });
+    }
     uploaded.add(attachment.key);
     onUploaded();
   }

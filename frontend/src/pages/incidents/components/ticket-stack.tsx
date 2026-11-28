@@ -75,6 +75,8 @@ export function TicketStackItem({ incident, selected, detail, progress, travel =
     last ? styles.lastPaper : styles.stackPaper,
     { backgroundColor: last ? 'transparent' : theme.ticketPaper },
   ]);
+  const content = detail ? <TicketDetail incident={incident} detail={detail} allowRetry={false} />
+    : <><TicketHeader compact title={incident.title} status={incident.status} /><View style={styles.stackTail} /></>;
   const ticket = (
     <Pressable
       ref={ref}
@@ -84,7 +86,7 @@ export function TicketStackItem({ incident, selected, detail, progress, travel =
       accessibilityLabel={`Abrir aviso: ${incident.title?.trim() || 'Sin título'}`}
       onPress={onSelect ? () => ref.current?.measureInWindow((x, y, width) => onSelect({ incident, frame: { x, y, width }, last }, restoreFocus)) : undefined}
       style={href ? paperStyle : ({ pressed }) => [paperStyle, { opacity: pressed ? 0.85 : 1 }]}>
-      {detail ? <TicketDetail incident={incident} detail={detail} allowRetry={false} /> : <><TicketHeader compact title={incident.title} status={incident.status} /><View style={styles.stackTail} /></>}
+      {Platform.OS === 'android' ? <View collapsable={false}>{content}</View> : content}
     </Pressable>
   );
   const translateY = slide && arrivalOffset ? Animated.add(slide, arrivalOffset) : arrivalOffset ?? slide ?? 0;

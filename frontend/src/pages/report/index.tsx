@@ -74,7 +74,13 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
   const hasLocation = location.mode !== 'assets' && !!location.coordinate && location.status === 'idle';
   const locked = form.busy || preparing || motion.active;
   const fieldsLocked = locked || !!form.createdIncidentId;
-  const primaryDisabled = locked || (step === 3 && resolving) || (step === 4 && (!ticketSize.height || !viewport.height));
+  const pendingAttachments = form.attachments.filter(attachment => !form.uploadedKeys.includes(attachment.key));
+  // Keep the Android ticket in one scroll container during submission and retries.
+  const animateTicket = Platform.OS !== 'android';
+  const ticketReady = !animateTicket || (ticketSize.height > 0 && viewport.height > 0);
+  const submitLabel = !form.createdIncidentId ? 'Reportar incidencia'
+    : pendingAttachments.length > 0 ? 'Reintentar archivos pendientes' : 'Finalizar incidencia';
+  const primaryDisabled = locked || (step === 3 && resolving) || (step === 4 && !ticketReady);
   const tearOffset = Animated.multiply(motion.tear, ticketSize.width);
   // The responder reads these refs only in gesture callbacks, never while rendering.
   // eslint-disable-next-line react-hooks/refs
@@ -144,22 +150,25 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
   }
 
   async function submit() {
-    if (submitting.current || !viewport.height || !ticketSize.height) return;
+    if (submitting.current || !ticketReady) return;
     submitting.current = true;
     setPreparing(true);
     onBusyChange?.(true);
-    const cutPosition = ticketSlot.y + ticketSize.height - TICKET_EDGE_HEIGHT;
-    const target = getTicketCutOffset(cutPosition, viewport.height, scrollPosition.current);
-    const [created, targetScroll] = await Promise.all([
-      form.submit(location.coordinate, location.street),
-      revealCut(target),
-    ]);
-    if (targetScroll == null) return;
-    setPreparing(false);
+    const created = await form.submit(location.coordinate, location.street);
     if (!created) {
       submitting.current = false;
+      setPreparing(false);
       return;
     }
+    if (!animateTicket) {
+      setFinishedIncident(created);
+      return;
+    }
+    const cutPosition = ticketSlot.y + ticketSize.height - TICKET_EDGE_HEIGHT;
+    const target = getTicketCutOffset(cutPosition, viewport.height, scrollPosition.current);
+    const targetScroll = await revealCut(target);
+    if (targetScroll == null) return;
+    setPreparing(false);
     setFlightDistance(Math.max(windowHeight * 0.5, viewport.y + ticketSlot.y + ticketSize.height - targetScroll + windowHeight * 0.1 + 32));
     // Unmount the paper first; the effect closes the sheet after that render commits.
     motion.start(() => setFinishedIncident(created), () => {
@@ -182,7 +191,7 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
       <View accessibilityLabel={`Paso ${step + 1} de ${steps.length}`} style={styles.progress}>
         {steps.map((item, index) => <View key={item.title} style={[styles.progressSegment, { backgroundColor: index <= step ? t.accentSurface : t.line }]} />)}
       </View>
-      <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} scrollEnabled={!motion.active} onLayout={event => { const { y, height } = event.nativeEvent.layout; setViewport(current => current.y === y && current.height === height ? current : { y, height }); }} onScroll={event => {
+      <ScrollView ref={scrollRef} removeClippedSubviews={false} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} scrollEnabled={!motion.active} onLayout={event => { const { y, height } = event.nativeEvent.layout; setViewport(current => current.y === y && current.height === height ? current : { y, height }); }} onScroll={event => {
           if (motion.active) return;
           const offset = event.nativeEvent.contentOffset.y;
           syncScroll(offset);
@@ -236,10 +245,12 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
             <Text selectable style={[styles.hint, { color: t.muted }]}>{location.streetStatus === 'loading' ? 'Buscando la calle…' : location.street || (location.coordinate ? `Ubicación seleccionada: ${location.coordinate.latitude.toFixed(5)}, ${location.coordinate.longitude.toFixed(5)}` : 'Todavía no has seleccionado una ubicación.')}</Text>
           </View>}
         </View>}
-        {step === 4 && <View style={{ height: ticketSize.height + PAPER_SCROLL_EXTENSION }} onLayout={event => { const { x, y, width } = event.nativeEvent.layout; setTicketSlot(current => current.x === x && current.y === y && current.width === width ? current : { x, y, width }); }} />}
+        {step === 4 && (animateTicket
+          ? <View style={{ height: ticketSize.height + PAPER_SCROLL_EXTENSION }} onLayout={event => { const { x, y, width } = event.nativeEvent.layout; setTicketSlot(current => current.x === x && current.y === y && current.width === width ? current : { x, y, width }); }} />
+          : <View collapsable={false} style={{ backgroundColor: t.ticketPaper }><IncidentTicketContent draft incident={{ title: form.title, description: form.description, category: form.category, status: null, registeredAt: form.registeredAt.toISOString(), latitude: location.coordinate?.latitude ?? null, longitude: location.coordinate?.longitude ?? null, normalizedAddress: location.street }} onChangeLocation={() => { if (!fieldsLocked) setStep(3); }} /></View>)}
         {!!validation && <Text accessibilityRole="alert" style={[styles.error, { color: t.error }]}>{validation}</Text>}
       </ScrollView>
-      {step === 4 && !finishedIncident && ticketSlot.width > 0 && <View pointerEvents="box-none" {...wheelProps} {...paperScroll.panHandlers} style={[styles.paperViewport, motion.active ? { top: 0, bottom: 0, overflow: 'visible' } : { top: viewport.y, height: viewport.height, overflow: 'hidden' }]}>
+      {animateTicket && step === 4 && !finishedIncident && ticketSlot.width > 0 && <View pointerEvents="box-none" {...wheelProps} {...paperScroll.panHandlers} style={[styles.paperViewport, motion.active ? { top: 0, bottom: 0, overflow: 'visible' } : { top: viewport.y, height: viewport.height, overflow: 'hidden' }]}>
         <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, motion.active && sheetOffset ? { transform: [{ translateY: Animated.multiply(sheetOffset, -1) }] } : undefined]}>
         <Animated.View style={[styles.paperStack, { position: 'absolute', left: ticketSlot.x, top: ticketSlot.y + (motion.active ? viewport.y : 0), width: ticketSlot.width, transform: [{ translateY: Animated.multiply(scrollOffset, -1) }] }]} pointerEvents={motion.active ? 'none' : 'auto'}>
           <Animated.View style={{ opacity: motion.fade, transform: [{ translateY: motion.ticket.interpolate({ inputRange: [0, 0.04, 1], outputRange: [0, 8, -flightDistance] }) }] }} onLayout={event => {
@@ -264,16 +275,18 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
         </Animated.View>
       </View>}
       <View pointerEvents="box-none" style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        {!!form.error && step === 4 && <View style={[styles.errorBanner, { backgroundColor: t.surface, borderColor: t.error }]}><Text accessibilityRole="alert" accessibilityLiveRegion="polite" selectable style={[styles.error, { color: t.error }]}>{form.error}</Text>
-          {form.createdIncidentId && form.attachments.filter(attachment => !form.uploadedKeys.includes(attachment.key)).map(attachment =>
-            <Pressable key={attachment.key} accessibilityRole="button" accessibilityLabel={`Omitir ${attachment.name}`}
-              disabled={form.busy} onPress={() => form.removeAttachment(attachment.key)}>
-              <Text style={[styles.link, { color: t.accent }]}>Omitir {attachment.name}</Text>
-            </Pressable>)}
-        </View>}
+        <View collapsable={false} pointerEvents="box-none">
+          {!!form.error && step === 4 && (!form.createdIncidentId || pendingAttachments.length > 0) && <View style={[styles.errorBanner, { backgroundColor: t.surface, borderColor: t.error }]}><Text accessibilityRole="alert" accessibilityLiveRegion="polite" selectable style={[styles.error, { color: t.error }]}>{form.error}</Text>
+            {form.createdIncidentId && pendingAttachments.map(attachment =>
+              <Pressable key={attachment.key} accessibilityRole="button" accessibilityLabel={`Omitir ${attachment.name}`}
+                disabled={form.busy} onPress={() => form.removeAttachment(attachment.key)}>
+                <Text style={[styles.link, { color: t.accent }]}>Omitir {attachment.name}</Text>
+              </Pressable>)}
+          </View>}
+        </View>
         <Animated.View pointerEvents={motion.active ? 'none' : 'auto'} style={{ opacity: motion.button, transform: [{ scale: motion.button.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }}><GlassSurface refractive style={[styles.primaryGlass, { borderColor: t.glassEdge }]}><Pressable accessibilityRole="button" accessibilityState={{ disabled: primaryDisabled, busy: form.busy || preparing || (step === 3 && resolving) }} disabled={primaryDisabled} onPress={() => step === 4 ? void submit() : next()} style={({ pressed }) => [styles.primaryButton, { opacity: pressed || primaryDisabled ? 0.65 : 1 }]}>
 
-          {form.busy || preparing || (step === 3 && resolving) ? <ActivityIndicator color={t.accent} /> : <><Text style={[styles.buttonText, { color: t.ink }]}>{step === 4 ? form.createdIncidentId ? 'Reintentar archivos pendientes' : 'Reportar incidencia' : 'Siguiente'}</Text><SymbolView name={{ ios: step === 4 ? 'checkmark' : 'arrow.right', android: step === 4 ? 'check' : 'arrow_forward', web: step === 4 ? 'check' : 'arrow_forward' }} size={19} tintColor={t.accent} /></>}
+          {form.busy || preparing || (step === 3 && resolving) ? <ActivityIndicator color={t.accent} /> : <><Text style={[styles.buttonText, { color: t.ink }]}>{step === 4 ? submitLabel : 'Siguiente'}</Text><SymbolView name={{ ios: step === 4 ? 'checkmark' : 'arrow.right', android: step === 4 ? 'check' : 'arrow_forward', web: step === 4 ? 'check' : 'arrow_forward' }} size={19} tintColor={t.accent} /></>}
         </Pressable></GlassSurface></Animated.View>
       </View>
     </View>

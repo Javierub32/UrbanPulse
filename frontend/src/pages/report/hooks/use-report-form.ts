@@ -49,7 +49,7 @@ export function useReportForm() {
   function removeAttachment(key: string) {
     if (pending.current || uploaded.current.has(key)) return;
     setAttachments(current => current.filter(attachment => attachment.key !== key));
-    setError('');
+    if (!createdIncident.current) setError('');
   }
 
   async function submit(coordinate: Coordinate | null, normalizedAddress: string | null) {
@@ -69,10 +69,6 @@ export function useReportForm() {
       }
       await uploadPendingAttachments(createdIncident.current.id, attachments, uploaded.current,
         () => setUploadedKeys([...uploaded.current]));
-      uploaded.current.clear();
-      setCreatedIncidentId(null);
-      setUploadedKeys([]);
-      setAttachments([]);
       return createdIncident.current;
     } catch (e) {
       const message = e instanceof Error ? e.message : 'No se ha podido enviar la incidencia.';

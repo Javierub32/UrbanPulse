@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Modal, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Modal, Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useTheme } from '@/hooks/use-theme';
 import type { IncidentListItem } from '@/types/incidents';
 import ReportScreen from './index';
@@ -28,6 +28,13 @@ export function ReportSheet({ visible, onClose, onSubmitted }: Props) {
   }, [visible, progress, reduceMotion]);
   const dismiss = useCallback((incident?: IncidentListItem) => {
     if (busy && !incident) return;
+    if (incident && Platform.OS === 'android') {
+      progress.setValue(0);
+      setMounted(false);
+      setPaperOverlaysSheet(false);
+      onSubmitted(incident);
+      return;
+    }
     Animated.timing(progress, { toValue: 0, duration: reduceMotion ? 0 : incident ? 600 : 220, easing: incident ? Easing.in(Easing.cubic) : Easing.in(Easing.quad), useNativeDriver: true }).start(({ finished }) => {
       if (!finished) return;
       setMounted(false);

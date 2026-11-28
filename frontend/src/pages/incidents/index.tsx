@@ -1,7 +1,7 @@
 import { SymbolView } from 'expo-symbols';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Animated, Easing, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Animated, Easing, FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ExploreMap } from '@/pages/explore';
 import { MAP_EDGE_TRANSITION_HEIGHT } from '@/pages/explore/map-types';
@@ -97,7 +97,7 @@ export default function CitizenIncidents() {
     setReportOpen(false);
     setMap(false);
     if (!matchesFilters(incident, filters, since, until)) setFilters(initialFilters);
-    setArrival({ id: incident.id, progress: new Animated.Value(0) });
+    if (Platform.OS !== 'android') setArrival({ id: incident.id, progress: new Animated.Value(0) });
     setCreated(incident);
     retry();
     refreshTotals();
@@ -163,7 +163,7 @@ export default function CitizenIncidents() {
       </View> : <FlatList ref={listRef} data={visible} keyExtractor={item => item.id} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: LIST_TOP_PADDING, paddingBottom: 170 + insets.bottom, gap: citizen ? 0 : 12 }} showsVerticalScrollIndicator={false}
         onLayout={event => { listMetrics.current.viewport = event.nativeEvent.layout.height; }}
         onScroll={event => { listMetrics.current.offset = event.nativeEvent.contentOffset.y; }} scrollEventThrottle={16}
-        removeClippedSubviews={arrival || selectedTicket ? false : undefined}
+        removeClippedSubviews={Platform.OS === 'android' || arrival || selectedTicket ? false : undefined}
         scrollEnabled={!selectedTicket}
         ListFooterComponent={page?.nextPageToken ? <View style={styles.empty}>
           {page.moreError && <Text accessibilityRole="alert" style={[styles.emptyText, { color: t.ink }]}>{page.moreError}</Text>}
