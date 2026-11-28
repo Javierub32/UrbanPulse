@@ -9,9 +9,9 @@ import { Spacing } from '@/constants/theme';
 import type { IncidentAttachment } from '@/types/incidents';
 import { getAttachmentSource } from '../services/incident-detail-service';
 
-type Props = { incidentId: string; attachment: IncidentAttachment; token: string };
+type Props = { incidentId: string; attachment: IncidentAttachment; token: string; height: number };
 
-function VideoMedia({ incidentId, attachment, token }: Props) {
+function VideoMedia({ incidentId, attachment, token, height }: Props) {
   const source = getAttachmentSource(incidentId, attachment.id, token);
   const player = useVideoPlayer({ ...source, contentType: 'progressive', useCaching: false });
   const { status } = useEvent(player, 'statusChange', { status: player.status });
@@ -25,7 +25,7 @@ function VideoMedia({ incidentId, attachment, token }: Props) {
     </View>;
   }
   return <VideoView player={player} nativeControls contentFit="contain"
-    style={{ width: '100%', height: 220, borderRadius: 12 }} />;
+    style={{ width: '100%', height, borderRadius: 8 }} />;
 }
 
 export function IncidentAttachmentMedia(props: Props) {
@@ -39,7 +39,7 @@ export function IncidentAttachmentMedia(props: Props) {
       style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}>
       <ThemedText type="linkPrimary">Reintentar foto</ThemedText>
     </Pressable>
-  </View> : <Image key={attempt} source={source} cachePolicy="none" contentFit="contain"
-    accessibilityLabel={`Foto adjunta: ${props.attachment.name}`} onError={() => setFailed(true)}
-    style={{ width: '100%', height: 220, borderRadius: 12 }} />;
+  </View> : <Image key={attempt} source={source} cachePolicy="none" contentFit="cover"
+    accessibilityLabel="Foto adjunta" onError={() => setFailed(true)}
+    style={{ width: '100%', height: props.height, borderRadius: 8 }} />;
 }

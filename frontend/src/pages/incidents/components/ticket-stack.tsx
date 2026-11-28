@@ -1,3 +1,4 @@
+import type { ImageSource } from 'expo-image';
 import { Link, type Href } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -6,7 +7,7 @@ import { AccessibilityInfo, ActivityIndicator, Animated, BackHandler, Easing, fi
 import { IncidentTicketContent, TICKET_STACK_BORDER_WIDTH, TICKET_TITLE_AREA_HEIGHT, TicketHeader } from '@/components/incident-ticket';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/hooks/use-theme';
-import { IncidentAttachments } from '@/pages/incident-detail/components/incident-attachments';
+import { IncidentAttachments, useIncidentAttachments } from '@/pages/incident-detail/components/incident-attachments';
 import { getIncidentDetail } from '@/pages/incident-detail/services/incident-detail-service';
 import { TicketBackground, TICKET_EDGE_HEIGHT } from '@/pages/report/components/ticket-paper';
 import { ApiError } from '@/services/api-client';
@@ -119,7 +120,7 @@ export function useTicketDetail(id?: string) {
   return { state, retry: () => setAttempt(value => value + 1) };
 }
 
-export function TicketDetail({ incident, detail, allowRetry = true, footerSpace = 0 }: { incident: TicketSummary; detail: ReturnType<typeof useTicketDetail>; allowRetry?: boolean; footerSpace?: number }) {
+export function TicketDetail({ incident, detail, cover, allowRetry = true, footerSpace = 0 }: { incident: TicketSummary; detail: ReturnType<typeof useTicketDetail>; cover?: ImageSource; allowRetry?: boolean; footerSpace?: number }) {
   const theme = useTheme();
   const { state, retry } = detail;
   const [paperSize, setPaperSize] = useState({ width: 0, height: 0 });
@@ -127,7 +128,7 @@ export function TicketDetail({ incident, detail, allowRetry = true, footerSpace 
   return <View style={paperSize.width === 0 ? { backgroundColor: theme.ticketPaper } : undefined} onLayout={event => { const { width, height } = event.nativeEvent.layout; setPaperSize(current => current.width === width && current.height === height ? current : { width, height }); }}>
     {paperSize.width > 0 && <TicketBackground width={paperSize.width} height={paperSize.height} color={theme.ticketPaper} ink={theme.ticketInk} />}
     <View pointerEvents="none" style={[styles.paperTopShadow, { backgroundColor: theme.ticketPaper }]} />
-    {state.status === 'success' ? <IncidentTicketContent incident={state.data} /> : <>
+    {state.status === 'success' ? <IncidentTicketContent incident={state.data} cover={cover} /> : <>
       <TicketHeader title={incident.title} status={incident.status} />
       {state.status === 'loading' ? <View style={styles.detailState}><ActivityIndicator color={theme.ticketMuted} /><Text style={[styles.stateText, { color: theme.ticketMuted }]}>Cargando incidencia…</Text></View> : <View style={styles.detailState}><Text accessibilityRole="alert" style={[styles.stateText, { color: theme.ticketInk }]}>{state.message}</Text>{state.retry && (allowRetry ? <Pressable accessibilityRole="button" onPress={retry} style={styles.retry}><Text style={[styles.retryText, { color: theme.ticketInk }]}>Reintentar</Text></Pressable> : <Text style={[styles.stateText, { color: theme.ticketMuted }]}>Abre el aviso para reintentar.</Text>)}</View>}
     </>}
@@ -150,6 +151,7 @@ type OverlayProps = {
 export function TicketOverlay({ selection, detail, progress, rootHeight, top, reduceMotion, backLabel = 'Volver a los avisos', backdropColor = 'rgba(128, 128, 128, 0.04)', onClosed }: OverlayProps) {
   const theme = useTheme();
   const { session } = useAuth();
+  const attachments = useIncidentAttachments(detail.state.status === 'success' ? selection.incident.id : undefined, session?.accessToken);
   const scrollRef = useRef<ScrollView>(null);
   const backRef = useRef<View>(null);
   const scrollOffset = useRef(0);
@@ -218,11 +220,11 @@ export function TicketOverlay({ selection, detail, progress, rootHeight, top, re
         <Animated.View style={{ position: 'absolute', left: frame.x - 20, top: frame.y - 16, width: frame.width + 40, height: Math.max(1, rootHeight - top) + 16, transform: [{ translateY }] }}>
           <ScrollView ref={scrollRef} scrollEnabled={opened} showsVerticalScrollIndicator={false} contentContainerStyle={styles.ticketScroll} onScroll={event => { scrollOffset.current = Math.max(0, event.nativeEvent.contentOffset.y); }} scrollEventThrottle={16}>
             <Animated.View style={{ transform: [{ translateY: scrollReturn }] }}>
-              <TicketDetail key={selection.incident.id} incident={selection.incident} detail={detail} />
-              {detail.state.status === 'success' && session?.accessToken &&
+              <TicketDetail key={selection.incident.id} incident={selection.incident} detail={detail} cover={attachments.cover} />
+              {detail.state.status === 'success' && session?.accessToken && attachments.gallery &&
                 <View style={{ padding: 20, backgroundColor: theme.ticketPaper }}>
                   <IncidentAttachments key={`${selection.incident.id}:${session.accessToken}`}
-                    incidentId={selection.incident.id} token={session.accessToken} />
+                    incidentId={selection.incident.id} token={session.accessToken} state={attachments.gallery} retry={attachments.retry} />
                 </View>}
             </Animated.View>
           </ScrollView>

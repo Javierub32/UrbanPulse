@@ -9,19 +9,19 @@ import { Spacing } from '@/constants/theme';
 import type { IncidentAttachment } from '@/types/incidents';
 import { getAttachmentBlob } from '../services/incident-detail-service';
 
-type Props = { incidentId: string; attachment: IncidentAttachment; token: string };
+type Props = { incidentId: string; attachment: IncidentAttachment; token: string; height: number };
 type MediaState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; uri: string };
 
-function VideoMedia({ uri }: { uri: string }) {
+function VideoMedia({ uri, height }: { uri: string; height: number }) {
   const player = useVideoPlayer(uri);
   const { status } = useEvent(player, 'statusChange', { status: player.status });
   return status === 'error'
     ? <ThemedText accessibilityRole="alert">Este navegador no ha podido reproducir el vídeo.</ThemedText>
     : <VideoView player={player} nativeControls contentFit="contain"
-        style={{ width: '100%', height: 220, borderRadius: 12 }} />;
+        style={{ width: '100%', height, borderRadius: 8 }} />;
 }
 
-function MediaRequest({ incidentId, attachment, onRetry }: Props & { onRetry: () => void }) {
+function MediaRequest({ incidentId, attachment, height, onRetry }: Props & { onRetry: () => void }) {
   const [state, setState] = useState<MediaState>({ status: 'loading' });
   useEffect(() => {
     const controller = new AbortController();
@@ -39,8 +39,9 @@ function MediaRequest({ incidentId, attachment, onRetry }: Props & { onRetry: ()
     };
   }, [incidentId, attachment.id]);
 
-  if (state.status === 'loading') return <View accessibilityRole="progressbar" accessibilityLabel={`Cargando ${attachment.name}`}>
-    <ActivityIndicator /><ThemedText type="small">Cargando archivo…</ThemedText>
+  if (state.status === 'loading') return <View accessibilityRole="progressbar" accessibilityLabel="Cargando archivo"
+    style={{ height, justifyContent: 'center' }}>
+    <ActivityIndicator />
   </View>;
   if (state.status === 'error') return <View style={{ gap: Spacing.two }}>
     <ThemedText selectable accessibilityRole="alert">{state.message}</ThemedText>
@@ -50,11 +51,11 @@ function MediaRequest({ incidentId, attachment, onRetry }: Props & { onRetry: ()
     </Pressable>
   </View>;
   return attachment.type === 'PHOTO'
-    ? <Image source={{ uri: state.uri }} contentFit="contain" cachePolicy="none"
-        accessibilityLabel={`Foto adjunta: ${attachment.name}`}
+    ? <Image source={{ uri: state.uri }} contentFit="cover" cachePolicy="none"
+        accessibilityLabel="Foto adjunta"
         onError={() => setState({ status: 'error', message: 'No se ha podido mostrar esta foto.' })}
-        style={{ width: '100%', height: 220, borderRadius: 12 }} />
-    : <VideoMedia uri={state.uri} />;
+        style={{ width: '100%', height, borderRadius: 8 }} />
+    : <VideoMedia uri={state.uri} height={height} />;
 }
 
 export function IncidentAttachmentMedia(props: Props) {

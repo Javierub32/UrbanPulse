@@ -34,6 +34,7 @@ export function useReportForm() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images', 'videos'],
         allowsMultipleSelection: true,
+        orderedSelection: true,
         selectionLimit: MAX_ATTACHMENTS - attachments.length,
         quality: 1,
       });

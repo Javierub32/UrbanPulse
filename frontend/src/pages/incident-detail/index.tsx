@@ -8,7 +8,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { categories } from '@/pages/report/services/report-service';
 import { ApiError } from '@/services/api-client';
 import type { IncidentDetail } from '@/types/incidents';
-import { IncidentAttachments } from './components/incident-attachments';
+import { IncidentAttachments, useIncidentAttachments } from './components/incident-attachments';
 import { getIncidentDetail } from './services/incident-detail-service';
 import { useAuth } from '@/context/AuthContext';
 import { ReviewActions } from './components/review-actions';
@@ -37,6 +37,7 @@ function IncidentDetailContent({ id }: { id: string }) {
   const { session } = useAuth();
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<State>({ status: 'loading' });
+  const attachments = useIncidentAttachments(state.status === 'success' ? id : undefined, session?.accessToken, false);
   const retry = useCallback(() => setAttempt(value => value + 1), []);
 
   useEffect(() => {
@@ -74,8 +75,6 @@ function IncidentDetailContent({ id }: { id: string }) {
         <ThemedText type="subtitle" selectable>{state.data.title || 'Incidencia sin título'}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">{categories.find(item => item.value === state.data.category)?.label ?? state.data.category ?? 'Categoría no disponible'}</ThemedText>
       </View>
-      {session?.accessToken && <IncidentAttachments key={`${id}:${session.accessToken}`}
-        incidentId={id} token={session.accessToken} />}
       <View style={{ gap: Spacing.two }}><ThemedText type="smallBold">Descripción</ThemedText><ThemedText selectable>{state.data.description || 'No disponible'}</ThemedText></View>
       <View style={{ gap: Spacing.two }}><ThemedText type="smallBold">Información</ThemedText>
         {field('Prioridad', label(state.data.priority, priorities))}
@@ -104,6 +103,8 @@ function IncidentDetailContent({ id }: { id: string }) {
       <View style={{ gap: Spacing.three }}><ThemedText type="smallBold">Historial</ThemedText>
         {state.data.history.length === 0 ? <ThemedText themeColor="textSecondary">No hay actividad registrada.</ThemedText> : state.data.history.map((entry, index) => <View key={`${entry.changedAt}-${index}`} style={{ flexDirection: 'row', gap: Spacing.three }}><View style={{ width: 10, height: 10, borderRadius: 5, marginTop: 7, backgroundColor: theme.accent }} /><View style={{ flex: 1, gap: Spacing.one }}><ThemedText>{entry.action === 'INCIDENT_EDITED' ? 'Información de la incidencia editada' : entry.action === 'INFORMATION_REQUESTED' ? 'Información adicional solicitada' : `${entry.previousStatus ? `${label(entry.previousStatus, statuses)} → ` : ''}${label(entry.status, statuses)}`}</ThemedText>{entry.reason && <ThemedText>{entry.action === 'INCIDENT_EDITED' ? `Campos modificados: ${entry.reason}` : entry.reason}</ThemedText>}{session?.user.role === 'OPERATOR' && (entry.actorName || entry.actorId) && <ThemedText type="small" themeColor="textSecondary">Realizado por: {entry.actorName || entry.actorId}</ThemedText>}<ThemedText type="small" themeColor="textSecondary">{date(entry.changedAt)}</ThemedText></View></View>)}
       </View>
+      {session?.accessToken && attachments.gallery && <IncidentAttachments key={`${id}:${session.accessToken}`}
+        incidentId={id} token={session.accessToken} state={attachments.gallery} retry={attachments.retry} />}
     </View>}
   </ScrollView>;
 }

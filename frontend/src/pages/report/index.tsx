@@ -14,7 +14,8 @@ import LocationMap from './components/location-map';
 import { PaperSwatch, TicketBackground, TicketStrip, TICKET_EDGE_HEIGHT } from './components/ticket-paper';
 import { getTicketCutOffset } from './ticket-cut-scroll';
 import { useReportForm } from './hooks/use-report-form';
-import { ReportAttachmentPreview } from './components/report-attachment-preview';
+import { ReportAttachmentMedia, ReportAttachmentPreview } from './components/report-attachment-preview';
+import { AttachmentCarousel } from '@/components/attachment-carousel';
 import { canUploadAttachments, MAX_ATTACHMENTS } from './services/report-attachments';
 import { useReportLocation, type LocationMode } from './hooks/use-report-location';
 import { useTicketAnimation } from './hooks/use-ticket-animation';
@@ -75,6 +76,8 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
   const locked = form.busy || preparing || motion.active;
   const fieldsLocked = locked || !!form.createdIncidentId;
   const pendingAttachments = form.attachments.filter(attachment => !form.uploadedKeys.includes(attachment.key));
+  const cover = form.attachments.find(attachment => attachment.kind === 'image');
+  const reviewAttachments = form.attachments.filter(attachment => attachment.key !== cover?.key);
   // Keep the Android ticket in one scroll container during submission and retries.
   const animateTicket = Platform.OS !== 'android';
   const ticketReady = !animateTicket || (ticketSize.height > 0 && viewport.height > 0);
@@ -179,6 +182,17 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
     });
   }
 
+  const ticket = step === 4 && <>
+    <IncidentTicketContent draft incident={{ title: form.title, description: form.description, category: form.category, status: null, registeredAt: form.registeredAt.toISOString(), latitude: location.coordinate?.latitude ?? null, longitude: location.coordinate?.longitude ?? null, normalizedAddress: location.street, imageUri: cover?.uri }} onChangeLocation={() => { if (!fieldsLocked) setStep(3); }} />
+    {reviewAttachments.length > 0 && <View style={[styles.ticketAttachments, { borderColor: t.ticketLine }]}>
+      <Text accessibilityRole="header" style={[styles.label, { color: t.ticketInk }]}>Fotos y vídeos adjuntos</Text>
+      <AttachmentCarousel>
+        {({ width, height }) => reviewAttachments.map(attachment => <ReportAttachmentMedia key={attachment.key}
+          attachment={attachment} width={width} height={height} />)}
+      </AttachmentCarousel>
+    </View>}
+  </>;
+
   return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.screen, { backgroundColor: t.canvas }]}>
     <View style={[styles.shell, { paddingTop: insets.top + 12 }]}>
       <View style={styles.topBar}>
@@ -247,7 +261,7 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
         </View>}
         {step === 4 && (animateTicket
           ? <View style={{ height: ticketSize.height + PAPER_SCROLL_EXTENSION }} onLayout={event => { const { x, y, width } = event.nativeEvent.layout; setTicketSlot(current => current.x === x && current.y === y && current.width === width ? current : { x, y, width }); }} />
-          : <View collapsable={false} style={{ backgroundColor: t.ticketPaper }><IncidentTicketContent draft incident={{ title: form.title, description: form.description, category: form.category, status: null, registeredAt: form.registeredAt.toISOString(), latitude: location.coordinate?.latitude ?? null, longitude: location.coordinate?.longitude ?? null, normalizedAddress: location.street }} onChangeLocation={() => { if (!fieldsLocked) setStep(3); }} /></View>)}
+          : <View collapsable={false} style={{ backgroundColor: t.ticketPaper }}>{ticket}</View>)}
         {!!validation && <Text accessibilityRole="alert" style={[styles.error, { color: t.error }]}>{validation}</Text>}
       </ScrollView>
       {animateTicket && step === 4 && !finishedIncident && ticketSlot.width > 0 && <View pointerEvents="box-none" {...wheelProps} {...paperScroll.panHandlers} style={[styles.paperViewport, motion.active ? { top: 0, bottom: 0, overflow: 'visible' } : { top: viewport.y, height: viewport.height, overflow: 'hidden' }]}>
@@ -258,7 +272,7 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
           setTicketSize(current => current.width === width && current.height === height ? current : { width, height });
         }}>
           {ticketSize.width > 0 && <TicketBackground width={ticketSize.width} height={ticketSize.height} color={t.ticketPaper} ink={t.ticketInk} showTearEdge />}
-          <IncidentTicketContent draft incident={{ title: form.title, description: form.description, category: form.category, status: null, registeredAt: form.registeredAt.toISOString(), latitude: location.coordinate?.latitude ?? null, longitude: location.coordinate?.longitude ?? null, normalizedAddress: location.street }} onChangeLocation={() => { if (!fieldsLocked) setStep(3); }} />
+          {ticket}
           <View style={{ height: TICKET_EDGE_HEIGHT }} /></Animated.View>
           {ticketSize.width > 0 && <Animated.View pointerEvents="none" style={[styles.ticketStrip, { top: ticketSize.height - TICKET_EDGE_HEIGHT, width: ticketSize.width, height: stripHeight, opacity: motion.fade, transformOrigin: [ticketSize.width, 0, 0], transform: [
             { translateY: motion.fall.interpolate({ inputRange: [0, 1], outputRange: [0, windowHeight + stripHeight] }) },
@@ -300,6 +314,7 @@ const styles = StyleSheet.create({
   optionList: { gap: 10 }, option: { minHeight: 74, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderWidth: 1, borderRadius: 16, borderCurve: 'continuous' }, optionIcon: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, optionCopy: { flex: 1, gap: 3 }, optionTitle: { fontSize: 15, fontWeight: '700' }, optionDetail: { fontSize: 13, lineHeight: 18 }, radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' }, radioDot: { width: 10, height: 10, borderRadius: 5 }, inline: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 14 }, noticeBox: { padding: 16, borderRadius: 14, gap: 8 }, notice: { padding: 14, borderRadius: 12, overflow: 'hidden', fontSize: 14, lineHeight: 20 }, link: { fontSize: 14, fontWeight: '700', paddingVertical: 4 }, error: { fontSize: 14, lineHeight: 20 },
   tearClip: { position: 'absolute', top: -1, left: 0, height: TICKET_EDGE_HEIGHT + 2, overflow: 'hidden' },
   attachedSwatch: { height: TICKET_EDGE_HEIGHT + 2, borderLeftWidth: 0.75, borderRightWidth: 0.75, borderColor: 'rgba(0, 0, 0, 0.07)' },
+  ticketAttachments: { gap: 12, padding: 18, borderTopWidth: StyleSheet.hairlineWidth },
   paperViewport: { position: 'absolute', left: 0, right: 0, zIndex: 10 }, paperStack: { paddingBottom: PAPER_SCROLL_EXTENSION }, ticketStrip: { position: 'absolute', left: 0 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 14, gap: 8, zIndex: 20 }, errorBanner: { padding: 12, borderWidth: 1, borderRadius: 12 }, primaryGlass: { borderRadius: 30, borderCurve: 'continuous', borderWidth: 1, boxShadow: '0 7px 20px rgba(15, 56, 58, 0.14)' }, primaryButton: { minHeight: 56, borderRadius: 30, borderCurve: 'continuous', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 }, buttonText: { fontSize: 16, fontWeight: '700' },
 });
