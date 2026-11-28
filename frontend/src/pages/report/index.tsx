@@ -14,6 +14,9 @@ import LocationMap from './components/location-map';
 import { PaperSwatch, TicketBackground, TicketStrip, TICKET_EDGE_HEIGHT } from './components/ticket-paper';
 import { getTicketCutOffset } from './ticket-cut-scroll';
 import { useReportForm } from './hooks/use-report-form';
+import { ReportAttachmentMedia, ReportAttachmentPreview } from './components/report-attachment-preview';
+import { AttachmentCarousel } from '@/components/attachment-carousel';
+import { canUploadAttachments, MAX_ATTACHMENTS } from './services/report-attachments';
 import { useReportLocation, type LocationMode } from './hooks/use-report-location';
 import { useTicketAnimation } from './hooks/use-ticket-animation';
 
@@ -71,7 +74,16 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
   const resolving = location.status === 'loading' || location.streetStatus === 'loading';
   const hasLocation = location.mode !== 'assets' && !!location.coordinate && location.status === 'idle';
   const locked = form.busy || preparing || motion.active;
-  const primaryDisabled = locked || (step === 3 && resolving) || (step === 4 && (!ticketSize.height || !viewport.height));
+  const fieldsLocked = locked || !!form.createdIncidentId;
+  const pendingAttachments = form.attachments.filter(attachment => !form.uploadedKeys.includes(attachment.key));
+  const cover = form.attachments.find(attachment => attachment.kind === 'image');
+  const reviewAttachments = form.attachments.filter(attachment => attachment.key !== cover?.key);
+  // Keep the Android ticket in one scroll container during submission and retries.
+  const animateTicket = Platform.OS !== 'android';
+  const ticketReady = !animateTicket || (ticketSize.height > 0 && viewport.height > 0);
+  const submitLabel = !form.createdIncidentId ? 'Reportar incidencia'
+    : pendingAttachments.length > 0 ? 'Reintentar archivos pendientes' : 'Finalizar incidencia';
+  const primaryDisabled = locked || (step === 3 && resolving) || (step === 4 && !ticketReady);
   const tearOffset = Animated.multiply(motion.tear, ticketSize.width);
   // The responder reads these refs only in gesture callbacks, never while rendering.
   // eslint-disable-next-line react-hooks/refs
@@ -85,7 +97,7 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
     if (locked) return;
     scrollRef.current?.scrollTo({ y: Math.max(0, scrollPosition.current + event.deltaY), animated: false });
   } } : {};
-  useEffect(() => { onBusyChange?.(locked); }, [locked, onBusyChange]);
+  useEffect(() => { onBusyChange?.(fieldsLocked); }, [fieldsLocked, onBusyChange]);
   useEffect(() => () => pendingScroll.current?.cancel(), []);
   useEffect(() => { onPaperOverlayChange?.(motion.active); }, [motion.active, onPaperOverlayChange]);
   useEffect(() => {
@@ -141,23 +153,25 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
   }
 
   async function submit() {
-    if (submitting.current || !viewport.height || !ticketSize.height) return;
+    if (submitting.current || !ticketReady) return;
     submitting.current = true;
     setPreparing(true);
     onBusyChange?.(true);
-    const cutPosition = ticketSlot.y + ticketSize.height - TICKET_EDGE_HEIGHT;
-    const target = getTicketCutOffset(cutPosition, viewport.height, scrollPosition.current);
-    const [created, targetScroll] = await Promise.all([
-      form.submit(location.coordinate, location.street),
-      revealCut(target),
-    ]);
-    if (targetScroll == null) return;
-    setPreparing(false);
+    const created = await form.submit(location.coordinate, location.street);
     if (!created) {
       submitting.current = false;
-      onBusyChange?.(false);
+      setPreparing(false);
       return;
     }
+    if (!animateTicket) {
+      setFinishedIncident(created);
+      return;
+    }
+    const cutPosition = ticketSlot.y + ticketSize.height - TICKET_EDGE_HEIGHT;
+    const target = getTicketCutOffset(cutPosition, viewport.height, scrollPosition.current);
+    const targetScroll = await revealCut(target);
+    if (targetScroll == null) return;
+    setPreparing(false);
     setFlightDistance(Math.max(windowHeight * 0.5, viewport.y + ticketSlot.y + ticketSize.height - targetScroll + windowHeight * 0.1 + 32));
     // Unmount the paper first; the effect closes the sheet after that render commits.
     motion.start(() => setFinishedIncident(created), () => {
@@ -168,10 +182,21 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
     });
   }
 
+  const ticket = step === 4 && <>
+    <IncidentTicketContent draft incident={{ title: form.title, description: form.description, category: form.category, status: null, registeredAt: form.registeredAt.toISOString(), latitude: location.coordinate?.latitude ?? null, longitude: location.coordinate?.longitude ?? null, normalizedAddress: location.street, imageUri: cover?.uri }} onChangeLocation={() => { if (!fieldsLocked) setStep(3); }} />
+    {reviewAttachments.length > 0 && <View style={[styles.ticketAttachments, { borderColor: t.ticketLine }]}>
+      <Text accessibilityRole="header" style={[styles.label, { color: t.ticketInk }]}>Fotos y vídeos adjuntos</Text>
+      <AttachmentCarousel>
+        {({ width, height }) => reviewAttachments.map(attachment => <ReportAttachmentMedia key={attachment.key}
+          attachment={attachment} width={width} height={height} />)}
+      </AttachmentCarousel>
+    </View>}
+  </>;
+
   return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.screen, { backgroundColor: t.canvas }]}>
     <View style={[styles.shell, { paddingTop: insets.top + 12 }]}>
       <View style={styles.topBar}>
-        <Pressable accessibilityRole="button" accessibilityLabel={step === 0 ? 'Cerrar formulario' : 'Volver al paso anterior'} accessibilityState={{ disabled: locked }} disabled={locked} onPress={() => { setValidation(''); if (step === 0) { if (onClose) onClose(); else router.replace('/'); } else setStep(step - 1); }} style={({ pressed }) => [styles.iconButton, { backgroundColor: t.surface, borderColor: t.line, opacity: pressed ? 0.65 : 1 }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={step === 0 ? 'Cerrar formulario' : 'Volver al paso anterior'} accessibilityState={{ disabled: fieldsLocked }} disabled={fieldsLocked} onPress={() => { setValidation(''); if (step === 0) { if (onClose) onClose(); else router.replace('/'); } else setStep(step - 1); }} style={({ pressed }) => [styles.iconButton, { backgroundColor: t.surface, borderColor: t.line, opacity: pressed ? 0.65 : 1 }]}>
           <SymbolView name={{ ios: step === 0 ? 'xmark' : 'arrow.left', android: step === 0 ? 'close' : 'arrow_back', web: step === 0 ? 'close' : 'arrow_back' }} size={19} tintColor={t.ink} />
         </Pressable>
         <Text style={[styles.topLabel, { color: t.ink }]}>Nuevo aviso</Text>
@@ -180,7 +205,7 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
       <View accessibilityLabel={`Paso ${step + 1} de ${steps.length}`} style={styles.progress}>
         {steps.map((item, index) => <View key={item.title} style={[styles.progressSegment, { backgroundColor: index <= step ? t.accentSurface : t.line }]} />)}
       </View>
-      <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} scrollEnabled={!motion.active} onLayout={event => { const { y, height } = event.nativeEvent.layout; setViewport(current => current.y === y && current.height === height ? current : { y, height }); }} onScroll={event => {
+      <ScrollView ref={scrollRef} removeClippedSubviews={false} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} scrollEnabled={!motion.active} onLayout={event => { const { y, height } = event.nativeEvent.layout; setViewport(current => current.y === y && current.height === height ? current : { y, height }); }} onScroll={event => {
           if (motion.active) return;
           const offset = event.nativeEvent.contentOffset.y;
           syncScroll(offset);
@@ -194,6 +219,21 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
         {step === 0 && <View style={styles.formGroup}>
           <View style={styles.field}><Text style={[styles.label, { color: t.ink }]}>Título</Text><TextInput accessibilityLabel="Título de la incidencia" placeholder="Por ejemplo, farola apagada" placeholderTextColor={t.muted} maxLength={255} value={form.title} onChangeText={form.setTitle} style={[styles.input, { color: t.ink, backgroundColor: t.surface, borderColor: t.line }]} /></View>
           <View style={styles.field}><Text style={[styles.label, { color: t.ink }]}>Descripción</Text><TextInput accessibilityLabel="Descripción de la incidencia" placeholder="Describe lo que has visto y cualquier detalle que pueda ayudarnos" placeholderTextColor={t.muted} multiline value={form.description} onChangeText={form.setDescription} style={[styles.input, styles.textarea, { color: t.ink, backgroundColor: t.surface, borderColor: t.line }]} /><Text style={[styles.hint, { color: t.muted }]}>Cuantos más detalles nos des, mejor podremos entender el problema.</Text></View>
+          {canUploadAttachments() && <View style={styles.field}>
+            <Text style={[styles.label, { color: t.ink }]}>Fotos y vídeos</Text>
+            <Text style={[styles.hint, { color: t.muted }]}>Opcional. Hasta {MAX_ATTACHMENTS} archivos JPEG, PNG, MP4 o MOV; máximo 10 MiB cada uno.</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Seleccionar fotos y vídeos"
+              accessibilityState={{ disabled: fieldsLocked || form.attachments.length >= MAX_ATTACHMENTS }}
+              disabled={fieldsLocked || form.attachments.length >= MAX_ATTACHMENTS}
+              onPress={() => void form.pickAttachments()}
+              style={({ pressed }) => [styles.input, { alignSelf: 'flex-start', justifyContent: 'center', backgroundColor: t.surface, borderColor: t.line, opacity: pressed ? 0.65 : 1 }]}>
+              <Text style={[styles.link, { color: t.accent }]}>Seleccionar fotos y vídeos</Text>
+            </Pressable>
+            {form.attachments.map(attachment => <ReportAttachmentPreview key={attachment.key} attachment={attachment}
+              uploaded={form.uploadedKeys.includes(attachment.key)} disabled={fieldsLocked}
+              onRemove={() => form.removeAttachment(attachment.key)} />)}
+            {!!form.error && <Text accessibilityRole="alert" style={[styles.error, { color: t.error }]}>{form.error}</Text>}
+          </View>}
         </View>}
         {step === 1 && <View accessibilityRole="radiogroup" style={styles.optionList}>{form.categories.map(item => {
           const selected = form.category === item.value;
@@ -219,10 +259,12 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
             <Text selectable style={[styles.hint, { color: t.muted }]}>{location.streetStatus === 'loading' ? 'Buscando la calle…' : location.street || (location.coordinate ? `Ubicación seleccionada: ${location.coordinate.latitude.toFixed(5)}, ${location.coordinate.longitude.toFixed(5)}` : 'Todavía no has seleccionado una ubicación.')}</Text>
           </View>}
         </View>}
-        {step === 4 && <View style={{ height: ticketSize.height + PAPER_SCROLL_EXTENSION }} onLayout={event => { const { x, y, width } = event.nativeEvent.layout; setTicketSlot(current => current.x === x && current.y === y && current.width === width ? current : { x, y, width }); }} />}
+        {step === 4 && (animateTicket
+          ? <View style={{ height: ticketSize.height + PAPER_SCROLL_EXTENSION }} onLayout={event => { const { x, y, width } = event.nativeEvent.layout; setTicketSlot(current => current.x === x && current.y === y && current.width === width ? current : { x, y, width }); }} />
+          : <View collapsable={false} style={{ backgroundColor: t.ticketPaper }}>{ticket}</View>)}
         {!!validation && <Text accessibilityRole="alert" style={[styles.error, { color: t.error }]}>{validation}</Text>}
       </ScrollView>
-      {step === 4 && !finishedIncident && ticketSlot.width > 0 && <View pointerEvents="box-none" {...wheelProps} {...paperScroll.panHandlers} style={[styles.paperViewport, motion.active ? { top: 0, bottom: 0, overflow: 'visible' } : { top: viewport.y, height: viewport.height, overflow: 'hidden' }]}>
+      {animateTicket && step === 4 && !finishedIncident && ticketSlot.width > 0 && <View pointerEvents="box-none" {...wheelProps} {...paperScroll.panHandlers} style={[styles.paperViewport, motion.active ? { top: 0, bottom: 0, overflow: 'visible' } : { top: viewport.y, height: viewport.height, overflow: 'hidden' }]}>
         <Animated.View pointerEvents="box-none" style={[StyleSheet.absoluteFill, motion.active && sheetOffset ? { transform: [{ translateY: Animated.multiply(sheetOffset, -1) }] } : undefined]}>
         <Animated.View style={[styles.paperStack, { position: 'absolute', left: ticketSlot.x, top: ticketSlot.y + (motion.active ? viewport.y : 0), width: ticketSlot.width, transform: [{ translateY: Animated.multiply(scrollOffset, -1) }] }]} pointerEvents={motion.active ? 'none' : 'auto'}>
           <Animated.View style={{ opacity: motion.fade, transform: [{ translateY: motion.ticket.interpolate({ inputRange: [0, 0.04, 1], outputRange: [0, 8, -flightDistance] }) }] }} onLayout={event => {
@@ -230,7 +272,7 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
           setTicketSize(current => current.width === width && current.height === height ? current : { width, height });
         }}>
           {ticketSize.width > 0 && <TicketBackground width={ticketSize.width} height={ticketSize.height} color={t.ticketPaper} ink={t.ticketInk} showTearEdge />}
-          <IncidentTicketContent draft incident={{ title: form.title, description: form.description, category: form.category, status: null, registeredAt: form.registeredAt.toISOString(), latitude: location.coordinate?.latitude ?? null, longitude: location.coordinate?.longitude ?? null, normalizedAddress: location.street }} onChangeLocation={() => { if (!locked) setStep(3); }} />
+          {ticket}
           <View style={{ height: TICKET_EDGE_HEIGHT }} /></Animated.View>
           {ticketSize.width > 0 && <Animated.View pointerEvents="none" style={[styles.ticketStrip, { top: ticketSize.height - TICKET_EDGE_HEIGHT, width: ticketSize.width, height: stripHeight, opacity: motion.fade, transformOrigin: [ticketSize.width, 0, 0], transform: [
             { translateY: motion.fall.interpolate({ inputRange: [0, 1], outputRange: [0, windowHeight + stripHeight] }) },
@@ -247,10 +289,18 @@ export default function ReportScreen({ onClose, onSubmitted, onBusyChange, onPap
         </Animated.View>
       </View>}
       <View pointerEvents="box-none" style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        {!!form.error && step === 4 && <View style={[styles.errorBanner, { backgroundColor: t.surface, borderColor: t.error }]}><Text accessibilityRole="alert" accessibilityLiveRegion="polite" selectable style={[styles.error, { color: t.error }]}>{form.error}</Text></View>}
+        <View collapsable={false} pointerEvents="box-none">
+          {!!form.error && step === 4 && (!form.createdIncidentId || pendingAttachments.length > 0) && <View style={[styles.errorBanner, { backgroundColor: t.surface, borderColor: t.error }]}><Text accessibilityRole="alert" accessibilityLiveRegion="polite" selectable style={[styles.error, { color: t.error }]}>{form.error}</Text>
+            {form.createdIncidentId && pendingAttachments.map(attachment =>
+              <Pressable key={attachment.key} accessibilityRole="button" accessibilityLabel={`Omitir ${attachment.name}`}
+                disabled={form.busy} onPress={() => form.removeAttachment(attachment.key)}>
+                <Text style={[styles.link, { color: t.accent }]}>Omitir {attachment.name}</Text>
+              </Pressable>)}
+          </View>}
+        </View>
         <Animated.View pointerEvents={motion.active ? 'none' : 'auto'} style={{ opacity: motion.button, transform: [{ scale: motion.button.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] }}><GlassSurface refractive style={[styles.primaryGlass, { borderColor: t.glassEdge }]}><Pressable accessibilityRole="button" accessibilityState={{ disabled: primaryDisabled, busy: form.busy || preparing || (step === 3 && resolving) }} disabled={primaryDisabled} onPress={() => step === 4 ? void submit() : next()} style={({ pressed }) => [styles.primaryButton, { opacity: pressed || primaryDisabled ? 0.65 : 1 }]}>
 
-          {form.busy || preparing || (step === 3 && resolving) ? <ActivityIndicator color={t.accent} /> : <><Text style={[styles.buttonText, { color: t.ink }]}>{step === 4 ? 'Reportar incidencia' : 'Siguiente'}</Text><SymbolView name={{ ios: step === 4 ? 'checkmark' : 'arrow.right', android: step === 4 ? 'check' : 'arrow_forward', web: step === 4 ? 'check' : 'arrow_forward' }} size={19} tintColor={t.accent} /></>}
+          {form.busy || preparing || (step === 3 && resolving) ? <ActivityIndicator color={t.accent} /> : <><Text style={[styles.buttonText, { color: t.ink }]}>{step === 4 ? submitLabel : 'Siguiente'}</Text><SymbolView name={{ ios: step === 4 ? 'checkmark' : 'arrow.right', android: step === 4 ? 'check' : 'arrow_forward', web: step === 4 ? 'check' : 'arrow_forward' }} size={19} tintColor={t.accent} /></>}
         </Pressable></GlassSurface></Animated.View>
       </View>
     </View>
@@ -264,6 +314,7 @@ const styles = StyleSheet.create({
   optionList: { gap: 10 }, option: { minHeight: 74, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderWidth: 1, borderRadius: 16, borderCurve: 'continuous' }, optionIcon: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, optionCopy: { flex: 1, gap: 3 }, optionTitle: { fontSize: 15, fontWeight: '700' }, optionDetail: { fontSize: 13, lineHeight: 18 }, radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' }, radioDot: { width: 10, height: 10, borderRadius: 5 }, inline: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 14 }, noticeBox: { padding: 16, borderRadius: 14, gap: 8 }, notice: { padding: 14, borderRadius: 12, overflow: 'hidden', fontSize: 14, lineHeight: 20 }, link: { fontSize: 14, fontWeight: '700', paddingVertical: 4 }, error: { fontSize: 14, lineHeight: 20 },
   tearClip: { position: 'absolute', top: -1, left: 0, height: TICKET_EDGE_HEIGHT + 2, overflow: 'hidden' },
   attachedSwatch: { height: TICKET_EDGE_HEIGHT + 2, borderLeftWidth: 0.75, borderRightWidth: 0.75, borderColor: 'rgba(0, 0, 0, 0.07)' },
+  ticketAttachments: { gap: 12, padding: 18, borderTopWidth: StyleSheet.hairlineWidth },
   paperViewport: { position: 'absolute', left: 0, right: 0, zIndex: 10 }, paperStack: { paddingBottom: PAPER_SCROLL_EXTENSION }, ticketStrip: { position: 'absolute', left: 0 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 14, gap: 8, zIndex: 20 }, errorBanner: { padding: 12, borderWidth: 1, borderRadius: 12 }, primaryGlass: { borderRadius: 30, borderCurve: 'continuous', borderWidth: 1, boxShadow: '0 7px 20px rgba(15, 56, 58, 0.14)' }, primaryButton: { minHeight: 56, borderRadius: 30, borderCurve: 'continuous', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 }, buttonText: { fontSize: 16, fontWeight: '700' },
 });

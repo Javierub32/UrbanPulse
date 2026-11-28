@@ -23,12 +23,12 @@ Los comandos de Docker se ejecutan desde esta carpeta, donde está [`compose.yml
 
 ## Ejecutar el backend
 
-Durante el desarrollo puedes dejar la base de datos en Docker y ejecutar la API con Maven.
+Durante el desarrollo puedes ejecutar la API con Maven y dejar PostGIS y MinIO en Docker. Spring Boot los arranca con Compose, aunque puedes inicializarlos antes para compilar la imagen de MinIO por separado.
 
-Primero inicia PostGIS desde la raíz del repositorio:
+Para iniciarlos manualmente desde la raíz del repositorio:
 
 ```bash
-docker compose up -d db
+docker compose up -d --build db minio
 ```
 
 Después entra en el backend:
@@ -49,7 +49,7 @@ En macOS/Linux:
 bash ./mvnw spring-boot:run
 ```
 
-Spring Boot utiliza la integración con Compose para obtener la conexión a la base de datos. Flyway aplica las migraciones al arrancar.
+Spring Boot utiliza Compose para obtener la conexión a la base de datos. Flyway aplica las migraciones al arrancar. MinIO escucha en `127.0.0.1:9000`. Si cambias sus credenciales o el bucket en el `.env` de Compose, exporta las mismas variables para Maven. Para detener ambos servicios después de cerrar Maven, ejecuta `docker compose stop db minio` desde la raíz.
 
 La API escucha en el puerto 8080 y PostgreSQL en el 5432. Si ya tienes la API ejecutándose en Docker, detén ese contenedor antes de arrancarla con Maven. Desde la raíz:
 

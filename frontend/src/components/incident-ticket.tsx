@@ -1,4 +1,4 @@
-import { Image } from 'expo-image';
+import { Image, type ImageSource } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
@@ -49,11 +49,11 @@ export function TicketHeader({ title, status, draft = false, compact = false }: 
   </View>;
 }
 
-export function TicketPhoto({ uri, compact = false, style }: { uri?: string | null; compact?: boolean; style?: StyleProp<ViewStyle> }) {
+export function TicketPhoto({ uri, source, compact = false, style }: { uri?: string | null; source?: ImageSource; compact?: boolean; style?: StyleProp<ViewStyle> }) {
   const theme = useTheme();
   const [failed, setFailed] = useState(false);
   return <View style={[compact ? styles.thumbnail : styles.photo, compact && { backgroundColor: theme.backgroundElement }, Platform.OS === 'web' && styles.monochromePhoto, style]}>
-    {uri && !failed ? <Image source={{ uri }} contentFit="cover" accessibilityLabel="Imagen de la incidencia" onError={() => setFailed(true)} style={StyleSheet.absoluteFill} /> :
+    {(source || uri) && !failed ? <Image source={source ?? { uri: uri ?? undefined }} cachePolicy={source ? 'none' : undefined} contentFit="cover" accessibilityLabel="Imagen de la incidencia" onError={() => setFailed(true)} style={StyleSheet.absoluteFill} /> :
       <View accessibilityLabel="Sin imagen" style={[styles.photoPlaceholder, compact && styles.thumbnailPlaceholder]}>
         <SymbolView name={{ ios: 'photo', android: 'image', web: 'image' }} size={compact ? 20 : 28} tintColor={compact ? theme.muted : theme.ticketMuted} />
         {!compact && <Text style={[styles.placeholderText, { color: theme.ticketMuted }]}>Sin imagen</Text>}
@@ -66,7 +66,7 @@ function TicketField({ label, value }: { label: string; value: string }) {
   return <View style={styles.field}><Text style={[styles.fieldLabel, { color: theme.ticketMuted }]}>{label}</Text><View aria-hidden accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.fieldLeader, { borderColor: '#858585' }]} /><Text selectable style={[styles.fieldValue, { color: theme.ticketInk }]}>{value}</Text></View>;
 }
 
-export function IncidentTicketContent({ incident, draft = false, onChangeLocation }: { incident: TicketIncident; draft?: boolean; onChangeLocation?: () => void }) {
+export function IncidentTicketContent({ incident, draft = false, cover, onChangeLocation }: { incident: TicketIncident; draft?: boolean; cover?: ImageSource; onChangeLocation?: () => void }) {
   const theme = useTheme();
   const date = parseDate(incident.registeredAt);
   const readings = incident.atmosphericData ?? [];
@@ -79,7 +79,7 @@ export function IncidentTicketContent({ incident, draft = false, onChangeLocatio
     <TicketHeader title={incident.title} status={incident.status} draft={draft} />
     <View style={styles.section}>
       <View style={styles.mediaRow}>
-        <TicketPhoto uri={incident.imageUri} />
+        <TicketPhoto key={cover?.uri ?? incident.imageUri ?? 'no-photo'} uri={incident.imageUri} source={cover} />
         <View style={styles.weather}>
           <SymbolView name={{ ios: 'cloud.sun', android: 'cloud', web: 'cloud' }} size={20} tintColor={theme.ticketMuted} />
           <Text style={[styles.label, { color: theme.ticketMuted }]}>DATOS{ '\n' }ATMOSFÉRICOS</Text>

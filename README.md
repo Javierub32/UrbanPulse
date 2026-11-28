@@ -49,7 +49,8 @@ La API requiere también `URBANPULSE_JWT_SECRET`: añade al `.env` una clave ale
 docker compose --profile container up --build -d
 ```
 
-El perfil `container` incluye la API. Si ejecutas `docker compose up -d` sin ese perfil, solo se inicia la base de datos.
+El perfil `container` incluye la API. Si ejecutas `docker compose up -d` sin ese perfil, se inician PostGIS y MinIO.
+Compose compila MinIO desde una versión fijada del código fuente la primera vez. El volumen `urbanpulse-media` conserva los adjuntos entre reinicios.
 
 La primera vez se descargan las imágenes y las dependencias del backend. Cuando PostGIS está listo, arranca la API y Flyway aplica las migraciones de `backend/src/main/resources/db/migration`. Estas crean el esquema y cargan activos urbanos, incidencias y usuarios sintéticos de demostración. No hay que ejecutar los SQL a mano.
 
@@ -128,7 +129,7 @@ Para cargar los últimos cambios, abre el menú de desarrollo de la app y pulsa 
 
 ## Arrancar el backend con Maven
 
-Si vas a trabajar en el código Java, puedes ejecutar la API en tu máquina y dejar PostGIS en Docker. Para esta opción necesitas un JDK 17. Maven se descarga con el wrapper incluido en el proyecto.
+Si vas a trabajar en el código Java, puedes ejecutar la API en tu máquina y dejar PostGIS y MinIO en Docker. Para esta opción necesitas un JDK 17. Maven se descarga con el wrapper incluido en el proyecto.
 
 Si tenías la API en Docker, párala antes para liberar el puerto `8080`:
 
@@ -136,10 +137,10 @@ Si tenías la API en Docker, párala antes para liberar el puerto `8080`:
 docker compose --profile container stop api
 ```
 
-Desde la raíz, inicia la base de datos y entra en el backend:
+Desde la raíz, inicia los servicios y entra en el backend:
 
 ```bash
-docker compose up -d db
+docker compose up -d --build db minio
 cd backend
 ```
 
@@ -156,6 +157,10 @@ En Windows, desde PowerShell:
 ```
 
 Ejecuta Maven desde `backend/`: la configuración busca el fichero `../compose.yml`. Spring Boot obtiene la conexión de la base de datos a través de Compose, incluida la contraseña definida en el `.env` de la raíz. Puedes comprobar el servidor con la misma URL de salud del apartado anterior.
+
+La API en local se conecta a MinIO por `http://127.0.0.1:9000`. Si cambias `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` o `URBANPULSE_STORAGE_BUCKET` en el `.env` de Compose, exporta también esas variables para el proceso de Maven. La primera subida crea el bucket privado si todavía no existe.
+
+PostGIS y MinIO siguen activos al cerrar Maven. Para pararlos, ejecuta `docker compose stop db minio` desde la raíz.
 
 ### Usar otra base de datos
 

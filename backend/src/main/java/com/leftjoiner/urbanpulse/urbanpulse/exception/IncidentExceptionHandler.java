@@ -2,16 +2,65 @@ package com.leftjoiner.urbanpulse.urbanpulse.exception;
 
 import com.leftjoiner.urbanpulse.urbanpulse.controller.IncidentAssignmentController;
 import com.leftjoiner.urbanpulse.urbanpulse.controller.IncidentController;
+import com.leftjoiner.urbanpulse.urbanpulse.controller.IncidentAttachmentController;
 import com.leftjoiner.urbanpulse.urbanpulse.controller.InitialReviewController;
+import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 @Slf4j
-@RestControllerAdvice(assignableTypes = {IncidentController.class, InitialReviewController.class, IncidentAssignmentController.class})
+@RestControllerAdvice(assignableTypes = {IncidentController.class, InitialReviewController.class,
+        IncidentAssignmentController.class, IncidentAttachmentController.class})
 public class IncidentExceptionHandler extends RequestExceptionHandler {
+
+    @ExceptionHandler(AttachmentException.class)
+    public ProblemDetail handleAttachment(AttachmentException exception) {
+        if (exception.getStatus() == HttpStatus.SERVICE_UNAVAILABLE) {
+            log.warn("Error al acceder al almacenamiento de adjuntos", exception);
+        }
+        if (exception.getStatus() == HttpStatus.BAD_REQUEST) {
+            return fileProblem(exception.getStatus(), exception.getCode(), exception.getMessage());
+        }
+        return problem(exception.getStatus(), "No se ha podido procesar el adjunto",
+                exception.getMessage(), exception.getCode());
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException exception,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        var detail = fileProblem(HttpStatus.CONTENT_TOO_LARGE, "ATTACHMENT_TOO_LARGE",
+                "El fichero supera el límite de 10 MB.");
+        return handleExceptionInternal(exception, detail, headers, status, request);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMissingServletRequestPart(MissingServletRequestPartException exception,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        var detail = fileProblem(HttpStatus.BAD_REQUEST, "INVALID_ATTACHMENT", "Selecciona un fichero.");
+        return handleExceptionInternal(exception, detail, headers, status, request);
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ProblemDetail handleMalformedMultipart(MultipartException exception) {
+        return fileProblem(HttpStatus.BAD_REQUEST, "INVALID_ATTACHMENT", "No se ha podido leer el fichero.");
+    }
+
+    private static ProblemDetail fileProblem(HttpStatus status, String code, String message) {
+        ProblemDetail detail = problem(status, "Fichero no válido", message, code);
+        detail.setProperty("errors", List.of(Map.of("field", "file", "code", code, "message", message)));
+        return detail;
+    }
 
     @ExceptionHandler(UserNotFoundException.class)
     public ProblemDetail handleUserNotFound(UserNotFoundException exception) {

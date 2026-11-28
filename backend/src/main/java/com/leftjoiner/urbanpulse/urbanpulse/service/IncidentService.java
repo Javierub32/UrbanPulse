@@ -92,13 +92,7 @@ public class IncidentService {
 
     @Transactional(readOnly = true)
     public IncidentDetailResponse getIncidentDetail(UUID incidentId, UrbanPulsePrincipal principal) {
-        IncidentEntity incident = (switch (principal.getRole()) {
-            case OPERATOR -> incidentRepository.findById(incidentId);
-            case CITIZEN -> incidentRepository.findByIdAndUserId(incidentId, principal.getId());
-            case TECHNICIAN -> incidentRepository.findAssignedById(incidentId, principal.getId());
-            default -> throw new AccessDeniedException("Acceso denegado");
-        })
-                .orElseThrow(IncidentNotFoundException::new);
+        IncidentEntity incident = requireAccessibleIncident(incidentId, principal);
         IncidentResponse response = incidentMapper.toDTO(incident);
         List<IncidentHistoryResponse> history = statusChangeRepository
                 .findAllByIncidentIdOrderByChangedAtAsc(incidentId)
@@ -112,6 +106,15 @@ public class IncidentService {
                 .map(atmosphericContextMapper::toDTO)
                 .toList();
         return new IncidentDetailResponse(response, history, atmosphericData, incident.getNormalizedAddress());
+    }
+
+    IncidentEntity requireAccessibleIncident(UUID incidentId, UrbanPulsePrincipal principal) {
+        return (switch (principal.getRole()) {
+            case OPERATOR -> incidentRepository.findById(incidentId);
+            case CITIZEN -> incidentRepository.findByIdAndUserId(incidentId, principal.getId());
+            case TECHNICIAN -> incidentRepository.findAssignedById(incidentId, principal.getId());
+            default -> throw new AccessDeniedException("Acceso denegado");
+        }).orElseThrow(IncidentNotFoundException::new);
     }
 
     @Transactional(readOnly = true)

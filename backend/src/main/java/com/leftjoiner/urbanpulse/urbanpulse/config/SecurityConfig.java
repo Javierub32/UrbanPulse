@@ -61,6 +61,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/operator/assignments/catalog").hasRole("OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/operator/assignments/*").hasRole("OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/incidents/create").hasRole("CITIZEN")
+                        .requestMatchers(HttpMethod.POST, "/api/incidents/{incidentId}/attachments").hasRole("CITIZEN")
+                        .requestMatchers(HttpMethod.GET, "/api/incidents/{incidentId}/attachments",
+                                "/api/incidents/{incidentId}/attachments/{attachmentId}")
+                                .hasAnyRole("CITIZEN", "OPERATOR", "TECHNICIAN")
                         .anyRequest().denyAll())
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService, problemHandler, userRepository),
                         UsernamePasswordAuthenticationFilter.class)

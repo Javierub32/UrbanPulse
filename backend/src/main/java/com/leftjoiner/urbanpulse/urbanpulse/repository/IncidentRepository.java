@@ -21,6 +21,12 @@ public interface IncidentRepository extends JpaRepository<IncidentEntity, UUID> 
 
     Optional<IncidentEntity> findByIdAndUserId(UUID incidentId, UUID userId);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select i from IncidentEntity i where i.id = :incidentId and i.user.id = :userId")
+    Optional<IncidentEntity> findOwnedForAttachmentUpload(
+            @org.springframework.data.repository.query.Param("incidentId") UUID incidentId,
+            @org.springframework.data.repository.query.Param("userId") UUID userId);
+
     List<IncidentEntity> findAllByUserIdOrderByRegisteredAtDescIdDesc(UUID userId);
 
     @org.springframework.data.jpa.repository.Query(value = """
